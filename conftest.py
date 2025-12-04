@@ -162,14 +162,20 @@ def authenticated_user(test_user, req_router_client, taskservice_client, test_co
     """Creates and authenticates a test user with user_info header."""
     # In test mode with ALLOW_DK_USER_INFO_HEADER=true,
     # we can bypass authentication by sending user info directly
+    
+    # Use the actual org from environment (e.g., "avengers")
+    actual_org = os.getenv("DEFAULT_ORG") or test_config.get("test_org", "dagknows")
+    
     user_info = {
-        "uid": test_user["id"],
+        "uid": str(test_user["id"]),  # Ensure string
         "uname": test_user["email"],
         "first_name": test_user["first_name"],
         "last_name": test_user["last_name"],
-        "org": test_config.get("test_org", "dagknows"),
+        "org": actual_org.lower(),  # Use actual org from environment
         "role": "Admin"
     }
+    
+    logger.info(f"Using org for tests: {actual_org}")
     
     # Set user info on clients (uses dk-user-info header)
     taskservice_client.set_user_info(user_info)
