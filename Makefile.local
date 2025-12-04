@@ -79,6 +79,14 @@ check-env: ## Check if .env.local is configured
 	fi
 	@echo "$(GREEN)✓ .env.local configured$(NC)"
 
+check-venv: ## Check if virtual environment exists
+	@if [ ! -d venv ]; then \
+		echo "$(YELLOW)⚠ Virtual environment not found$(NC)"; \
+		echo "$(YELLOW)Creating venv...$(NC)"; \
+		python3 -m venv venv; \
+		echo "$(GREEN)✓ Virtual environment created$(NC)"; \
+	fi
+
 check-dkapp: check-env ## Check if dkapp services are running
 	@echo "$(YELLOW)Checking if dkapp services are running...$(NC)"
 	@if ! docker network ls | grep -q saaslocalnetwork; then \
@@ -98,9 +106,13 @@ check-dkapp: check-env ## Check if dkapp services are running
 	fi
 	@echo "$(GREEN)✓ Services are running$(NC)"
 
-test-unit: check-env ## Run unit tests (fast, no services needed)
+test-unit: check-env check-venv ## Run unit tests (fast, no services needed)
 	@echo "$(GREEN)Running unit tests...$(NC)"
-	@. .env.local && pytest unit/ -v --tb=short --color=yes
+	@if [ -d venv ]; then \
+		. venv/bin/activate && . .env.local && pytest unit/ -v --tb=short --color=yes; \
+	else \
+		. .env.local && pytest unit/ -v --tb=short --color=yes; \
+	fi
 
 test-unit-docker: check-dkapp ## Run unit tests in Docker container
 	@echo "$(GREEN)Running unit tests in Docker...$(NC)"

@@ -1,0 +1,80 @@
+════════════════════════════════════════════════════════════
+    UBUNTU QUICK FIX - externally-managed-environment
+════════════════════════════════════════════════════════════
+
+YOU ARE HERE:
+-------------
+✓ dkapp running
+✓ .env.local created  
+✗ Python dependencies failed (externally-managed-environment)
+
+════════════════════════════════════════════════════════════
+
+SOLUTION (Copy-Paste This):
+---------------------------
+
+cd ~/tests
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+════════════════════════════════════════════════════════════
+
+VERIFY IT WORKED:
+-----------------
+
+make -f Makefile.local verify-services
+make -f Makefile.local quick
+
+Expected: Tests pass ✓
+
+════════════════════════════════════════════════════════════
+
+DAILY USAGE (Two Options):
+---------------------------
+
+Option 1: With venv activation
+-------------------------------
+cd ~/tests
+source venv/bin/activate     # Activate venv first
+make -f Makefile.local test-unit
+
+Option 2: Using Docker (easier)
+--------------------------------
+cd ~/tests
+make -f Makefile.local unit  # No venv needed!
+
+════════════════════════════════════════════════════════════
+
+WHY THIS HAPPENED:
+------------------
+
+Ubuntu 22.04+ uses Python 3.11+ which has a security feature
+that prevents installing packages system-wide (to protect
+your system Python).
+
+Solution: Use a virtual environment (venv) instead.
+
+════════════════════════════════════════════════════════════
+
+FULL COMMAND SEQUENCE:
+----------------------
+
+cd ~/tests
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+make -f Makefile.local verify-services
+make -f Makefile.local quick
+make -f Makefile.local unit
+
+════════════════════════════════════════════════════════════
+
+NEXT TIME:
+----------
+
+The setup-local.sh script has been updated to create venv
+automatically. If you re-run it, it will handle this for you.
+
+════════════════════════════════════════════════════════════
+

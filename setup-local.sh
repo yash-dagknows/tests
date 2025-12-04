@@ -152,12 +152,43 @@ echo -e "${GREEN}✓ Directories created${NC}"
 
 # Step 5: Install dependencies
 echo -e "\n${YELLOW}Step 5: Installing Python dependencies...${NC}"
-if command -v pip3 &> /dev/null; then
-    pip3 install -r requirements.txt
-    echo -e "${GREEN}✓ Dependencies installed${NC}"
+if command -v pip3 &> /dev/null || command -v pip &> /dev/null; then
+    # Check if we're in a virtual environment
+    if [ -z "$VIRTUAL_ENV" ]; then
+        # Not in venv, check if venv exists
+        if [ -d "venv" ]; then
+            echo -e "${YELLOW}Virtual environment found, activating...${NC}"
+            source venv/bin/activate
+            echo -e "${GREEN}✓ Virtual environment activated${NC}"
+        else
+            # Create virtual environment
+            echo -e "${YELLOW}Creating virtual environment (Python 3.11+ requirement)...${NC}"
+            python3 -m venv venv
+            if [ $? -eq 0 ]; then
+                source venv/bin/activate
+                echo -e "${GREEN}✓ Virtual environment created and activated${NC}"
+            else
+                echo -e "${RED}✗ Failed to create virtual environment${NC}"
+                echo -e "${YELLOW}Install manually: python3 -m venv venv${NC}"
+                echo -e "${YELLOW}Then activate: source venv/bin/activate${NC}"
+                echo -e "${YELLOW}Then install: pip install -r requirements.txt${NC}"
+            fi
+        fi
+    else
+        echo -e "${GREEN}✓ Already in virtual environment${NC}"
+    fi
+    
+    # Install dependencies
+    pip install -r requirements.txt 2>&1 | grep -v "Requirement already satisfied" || true
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Dependencies installed${NC}"
+    else
+        echo -e "${YELLOW}⚠ Some dependencies may have failed to install${NC}"
+        echo "Run manually: pip install -r requirements.txt"
+    fi
 else
-    echo -e "${YELLOW}⚠ pip3 not found, skipping Python dependencies${NC}"
-    echo "You'll need to install them before running tests locally"
+    echo -e "${YELLOW}⚠ pip not found, skipping Python dependencies${NC}"
+    echo "Install Python: sudo apt install python3 python3-pip python3-venv"
 fi
 
 # Step 6: Verify services
@@ -211,6 +242,14 @@ echo -e "  ${BLUE}make -f Makefile.local verify-services${NC}"
 
 echo -e "\n${YELLOW}Note:${NC} If you used .env.gpg, the decrypted .env was cleaned up."
 echo -e "Your credentials are safely stored in .env.local for testing."
+
+if [ -d "venv" ] && [ -z "$VIRTUAL_ENV" ]; then
+    echo -e "\n${YELLOW}Important:${NC} Virtual environment created but not currently active."
+    echo -e "Before running tests, activate it with:"
+    echo -e "  ${BLUE}source venv/bin/activate${NC}"
+    echo -e "\nOr use the Makefile which handles this automatically:"
+    echo -e "  ${BLUE}make -f Makefile.local quick${NC}"
+fi
 
 echo ""
 
