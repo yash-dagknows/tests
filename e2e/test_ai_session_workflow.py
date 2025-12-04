@@ -116,9 +116,11 @@ class TestAITaskGeneration:
 # Placeholder test that always passes to show structure
 @pytest.mark.e2e
 @pytest.mark.ai
+@pytest.mark.smoke
 class TestAIServicePlaceholder:
     """Placeholder tests for AI service integration."""
     
+    @pytest.mark.smoke
     def test_ai_service_architecture_documented(self):
         """
         Test that AI service integration is documented.
@@ -135,6 +137,7 @@ class TestAIServicePlaceholder:
         # This test always passes - it's just documentation
         assert True, "AI service integration documented"
     
+    @pytest.mark.smoke
     def test_ai_service_endpoints_defined(self):
         """
         Document expected AI service endpoints.

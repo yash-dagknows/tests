@@ -13,14 +13,12 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy test requirements
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy test files
+# Copy test files (including requirements.txt)
 COPY . .
+
+# Install Python dependencies at runtime (mounted requirements.txt will override)
+# This allows updating requirements without rebuilding the image
+RUN pip install --no-cache-dir -r requirements.txt || true
 
 # Create directories for test results
 RUN mkdir -p /app/tests/results /app/tests/logs
@@ -28,6 +26,9 @@ RUN mkdir -p /app/tests/results /app/tests/logs
 # Set Python path
 ENV PYTHONPATH=/app:/app/tests:/app/taskservice/src:/app/req_router/src
 ENV PYTHONUNBUFFERED=1
+
+# Install requirements at startup (in case they were updated after build)
+ENTRYPOINT ["sh", "-c", "pip install -q -r requirements.txt 2>/dev/null || true; exec \"$@\"", "--"]
 
 # Default command runs all tests
 CMD ["pytest", "-v", "--color=yes", "--junitxml=results/junit.xml", "--html=results/report.html"]
