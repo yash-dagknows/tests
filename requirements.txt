@@ -65,7 +65,7 @@ boltons==23.1.1
 Authlib==1.3.0
 pycryptodome==3.19.0
 pyjwt==2.4.0
-dkdbutils==0.1.0  # Assuming this is your internal package
+dkdbutils>=0.0.24  # Internal package - use latest available
 protobuf==5.29.3
 
 # Optional but recommended
