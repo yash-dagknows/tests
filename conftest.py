@@ -144,27 +144,38 @@ def test_user(test_config, req_router_client):
     
     logger.info(f"Creating test user: {user_data['email']}")
     
-    try:
-        user = req_router_client.create_user(user_data)
-        user["password"] = user_data["password"]  # Store for login
-        yield user
-    finally:
-        if test_config["auto_cleanup"]:
-            try:
-                logger.info(f"Cleaning up test user: {user_data['email']}")
-                req_router_client.delete_user(user["id"])
-            except Exception as e:
-                logger.warning(f"Failed to cleanup user: {e}")
+    # In test mode, create a mock user without actual API call
+    # since user creation requires authentication
+    user = {
+        "id": 1,
+        "email": user_data["email"],
+        "first_name": user_data["first_name"],
+        "last_name": user_data["last_name"],
+        "organization": user_data["organization"],
+        "password": user_data["password"],
+    }
+    
+    yield user
 
 @pytest.fixture(scope="function")
-def authenticated_user(test_user, req_router_client):
-    """Creates and authenticates a test user."""
-    token = req_router_client.login(
-        test_user["email"],
-        test_user["password"]
-    )
-    req_router_client.set_auth_token(token)
-    test_user["auth_token"] = token
+def authenticated_user(test_user, req_router_client, taskservice_client, test_config):
+    """Creates and authenticates a test user with user_info header."""
+    # In test mode with ALLOW_DK_USER_INFO_HEADER=true,
+    # we can bypass authentication by sending user info directly
+    user_info = {
+        "uid": test_user["id"],
+        "uname": test_user["email"],
+        "first_name": test_user["first_name"],
+        "last_name": test_user["last_name"],
+        "org": test_config.get("test_org", "dagknows"),
+        "role": "Admin"
+    }
+    
+    # Set user info on clients (uses dk-user-info header)
+    taskservice_client.set_user_info(user_info)
+    req_router_client.set_user_info(user_info)
+    
+    test_user["user_info"] = user_info
     return test_user
 
 @pytest.fixture(scope="function")

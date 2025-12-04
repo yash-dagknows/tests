@@ -47,8 +47,10 @@ class APIClient:
         self.user_info = user_info
         if self.test_mode:
             # In test mode, we can pass user info via header
+            # TaskService looks for 'dk-user-info' header (lowercase, no X- prefix)
+            import urllib.parse
             self.session.headers.update({
-                'X-DagKnows-User-Info': json.dumps(user_info)
+                'dk-user-info': urllib.parse.quote(json.dumps(user_info))
             })
     
     def _make_request(
