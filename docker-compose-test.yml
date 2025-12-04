@@ -132,7 +132,7 @@ services:
       - ../req_router/src:/usr/src/app/src:ro
       - test_logs:/usr/src/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8888/readiness_check"]
       interval: 10s
       timeout: 5s
       retries: 20

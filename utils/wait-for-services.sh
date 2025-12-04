@@ -10,9 +10,9 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Service endpoints to check
-ELASTICSEARCH_URL="${DAGKNOWS_ELASTIC_URL:-http://localhost:9200}"
-TASKSERVICE_URL="${DAGKNOWS_TASKSERVICE_URL:-http://localhost:2235}"
-REQ_ROUTER_URL="${DAGKNOWS_REQ_ROUTER_URL:-http://localhost:8888}"
+ELASTICSEARCH_URL="${DAGKNOWS_ELASTIC_URL:-http://localhost:9200}/_cluster/health"
+TASKSERVICE_URL="${DAGKNOWS_TASKSERVICE_URL:-http://localhost:2235}/health"
+REQ_ROUTER_URL="${DAGKNOWS_REQ_ROUTER_URL:-http://localhost:8888}/readiness_check"
 
 # Timeout settings
 MAX_RETRIES=30
@@ -43,13 +43,13 @@ wait_for_service() {
 }
 
 # Wait for Elasticsearch
-wait_for_service "Elasticsearch" "$ELASTICSEARCH_URL/_cluster/health" || exit 1
+wait_for_service "Elasticsearch" "$ELASTICSEARCH_URL" || exit 1
 
 # Wait for TaskService
-wait_for_service "TaskService" "$TASKSERVICE_URL/api/v1/tasks/status" || exit 1
+wait_for_service "TaskService" "$TASKSERVICE_URL" || exit 1
 
 # Wait for ReqRouter
-wait_for_service "ReqRouter" "$REQ_ROUTER_URL/health" || exit 1
+wait_for_service "ReqRouter" "$REQ_ROUTER_URL" || exit 1
 
 echo -e "${GREEN}All services are ready!${NC}"
 exit 0

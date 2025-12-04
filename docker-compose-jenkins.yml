@@ -20,6 +20,7 @@ services:
       - DAGKNOWS_ELASTIC_URL=http://elasticsearch:9200
       - DAGKNOWS_TASKSERVICE_URL=http://taskservice:2235
       - DAGKNOWS_REQ_ROUTER_URL=http://req-router:8888
+      - REQ_ROUTER_HEALTH_ENDPOINT=/readiness_check
       - DAGKNOWS_SETTINGS_URL=http://settings:2225
       - DAGKNOWS_CONV_MGR_URL=http://conv-mgr:2224
       - DAGKNOWS_WSFE_URL=http://wsfe:4446

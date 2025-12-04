@@ -325,7 +325,7 @@ class ReqRouterClient(APIClient):
     
     def health(self) -> Dict:
         """Check service health."""
-        return self.get('/health')
+        return self.get('/readiness_check')
 
 
 # Backward compatibility aliases

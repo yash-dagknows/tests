@@ -182,7 +182,7 @@ verify-services: check-dkapp ## Verify all services are accessible
 			curl -f http://taskservice:2235/health && \
 			echo -e "\n✓ TaskService OK" && \
 			echo "Testing ReqRouter..." && \
-			curl -f http://req-router:8888/health && \
+			curl -f http://req-router:8888/readiness_check && \
 			echo -e "\n✓ ReqRouter OK" && \
 			echo -e "\n$(GREEN)All services accessible!$(NC)" \
 		'

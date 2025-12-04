@@ -18,7 +18,7 @@ echo -e "${YELLOW}=====================================${NC}"
 declare -A SERVICES=(
     ["Elasticsearch"]="elasticsearch:9200/_cluster/health"
     ["TaskService"]="taskservice:2235/health"
-    ["ReqRouter"]="req-router:8888/health"
+    ["ReqRouter"]="req-router:8888/readiness_check"
     ["Settings"]="settings:2225/health"
 )
 
