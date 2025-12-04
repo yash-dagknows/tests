@@ -1,0 +1,171 @@
+╔════════════════════════════════════════════════════════════════╗
+║     DagKnows Test Suite - Fresh Instance Setup Checklist      ║
+╚════════════════════════════════════════════════════════════════╝
+
+PREREQUISITES:
+□ dkapp installed in home folder (~/dkapp/)
+□ dkproxy installed in home folder (~/dkproxy/)
+□ Docker installed and running
+□ Python 3.10+ installed
+
+═══════════════════════════════════════════════════════════════════
+
+STEP 1: START DKAPP SERVICES (5 minutes)
+═════════════════════════════════════════
+
+□ cd ~/dkapp
+□ docker-compose up -d
+□ sleep 60                    # Wait for services to start
+□ docker-compose ps           # Verify all services are "Up"
+□ docker network ls | grep saaslocalnetwork    # Should show network
+
+═══════════════════════════════════════════════════════════════════
+
+STEP 2: NAVIGATE TO TESTS (1 minute)
+═════════════════════════════════════
+
+□ cd ~/dagknows_src/tests
+□ pwd                         # Should show: .../dagknows_src/tests
+□ ls setup-local.sh           # Should exist
+
+═══════════════════════════════════════════════════════════════════
+
+STEP 3: MAKE SCRIPTS EXECUTABLE (1 minute)
+═══════════════════════════════════════════
+
+□ chmod +x setup-local.sh
+□ chmod +x ci/wait-for-services-jenkins.sh
+□ chmod +x utils/wait-for-services.sh
+
+═══════════════════════════════════════════════════════════════════
+
+STEP 4: INSTALL PYTHON DEPENDENCIES (2 minutes)
+════════════════════════════════════════════════
+
+□ pip3 install -r requirements.txt
+
+   If pip3 not found:
+   Ubuntu/Debian: sudo apt install python3 python3-pip
+   macOS: brew install python3
+
+═══════════════════════════════════════════════════════════════════
+
+STEP 5: RUN SETUP SCRIPT (5 minutes)
+═════════════════════════════════════
+
+□ ./setup-local.sh
+
+   If you have .env.gpg:
+   □ Enter GPG passphrase when prompted
+
+   Expected output:
+   ✓ dkapp directory found
+   ✓ saaslocalnetwork exists
+   ✓ .env.local created
+   ✓ Dependencies installed
+   ✓ Services verified
+
+═══════════════════════════════════════════════════════════════════
+
+STEP 6: VERIFY SERVICES (2 minutes)
+════════════════════════════════════
+
+□ make -f Makefile.local verify-services
+
+   Expected output:
+   ✓ Elasticsearch OK
+   ✓ TaskService OK
+   ✓ ReqRouter OK
+
+═══════════════════════════════════════════════════════════════════
+
+STEP 7: RUN FIRST TEST (2 minutes)
+═══════════════════════════════════
+
+□ make -f Makefile.local quick
+
+   Expected: Tests pass (2-3 tests in ~2 seconds)
+
+═══════════════════════════════════════════════════════════════════
+
+STEP 8: RUN UNIT TESTS (5 minutes)
+═══════════════════════════════════
+
+□ make -f Makefile.local unit
+
+   Expected: ~25 tests pass in 2-5 minutes
+
+═══════════════════════════════════════════════════════════════════
+
+SUCCESS! 🎉
+═══════════
+
+Your test suite is now working!
+
+═══════════════════════════════════════════════════════════════════
+
+QUICK COMMANDS FOR DAILY USE:
+══════════════════════════════
+
+# Navigate to tests
+cd ~/dagknows_src/tests
+
+# Quick tests (1-2 min)
+make -f Makefile.local quick
+
+# Unit tests (2-5 min)
+make -f Makefile.local unit
+
+# Integration tests (10-15 min)
+make -f Makefile.local integration
+
+# All tests (30-45 min)
+make -f Makefile.local test-all
+
+# Show all commands
+make -f Makefile.local help
+
+═══════════════════════════════════════════════════════════════════
+
+TROUBLESHOOTING:
+════════════════
+
+Problem: "saaslocalnetwork not found"
+Fix: cd ~/dkapp && docker-compose up -d && sleep 60
+
+Problem: "Connection refused"
+Fix: cd ~/dkapp && docker-compose restart && sleep 30
+
+Problem: "Permission denied"
+Fix: chmod +x setup-local.sh
+
+Problem: Services not starting
+Fix: cd ~/dkapp && docker-compose logs | tail -50
+
+═══════════════════════════════════════════════════════════════════
+
+HELP & DOCUMENTATION:
+═════════════════════
+
+cat START_HERE.md              # Start here overview
+cat QUICK_START.md             # 5-minute guide
+cat LOCAL_TESTING_GUIDE.md     # Detailed guide
+cat FRESH_INSTALL_GUIDE.md     # This setup guide
+cat GPG_SETUP.md               # GPG encryption guide
+make -f Makefile.local help    # All commands
+
+═══════════════════════════════════════════════════════════════════
+
+COMPLETE COMMAND SEQUENCE (Copy-Paste):
+════════════════════════════════════════
+
+cd ~/dkapp && docker-compose up -d && sleep 60
+cd ~/dagknows_src/tests
+chmod +x setup-local.sh
+./setup-local.sh
+make -f Makefile.local verify-services
+make -f Makefile.local quick
+make -f Makefile.local unit
+
+═══════════════════════════════════════════════════════════════════
+
