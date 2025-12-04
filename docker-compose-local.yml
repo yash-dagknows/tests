@@ -1,0 +1,74 @@
+version: '3.8'
+
+# Docker Compose for LOCAL testing with existing dkapp services
+# This connects to services running via dkapp/docker-compose.yml
+
+networks:
+  saaslocalnetwork:
+    external: true  # Uses your existing network from dkapp
+
+services:
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: dagknows_test_runner_local
+    networks:
+      - saaslocalnetwork
+    environment:
+      # Service URLs - use Docker service names (NOT localhost)
+      - DAGKNOWS_ELASTIC_URL=http://elasticsearch:9200
+      - DAGKNOWS_TASKSERVICE_URL=http://taskservice:2235
+      - DAGKNOWS_REQ_ROUTER_URL=http://req-router:8888
+      - DAGKNOWS_SETTINGS_URL=http://settings:2225
+      - DAGKNOWS_CONV_MGR_URL=http://conv-mgr:2224
+      - DAGKNOWS_WSFE_URL=http://wsfe:4446
+      
+      # Database connection
+      - POSTGRESQL_DB_HOST=postgres
+      - POSTGRESQL_DB_PORT=5432
+      - POSTGRESQL_DB_NAME=${POSTGRESQL_DB_NAME:-dagknows}
+      - POSTGRESQL_DB_USER=${POSTGRESQL_DB_USER:-postgres}
+      - POSTGRESQL_DB_PASSWORD=${POSTGRESQL_DB_PASSWORD}
+      
+      # Security - inherit from your dkapp setup
+      - APP_SECRET_KEY=${APP_SECRET_KEY}
+      - api_key=${api_key}
+      
+      # Test mode settings
+      - ALLOW_DK_USER_INFO_HEADER=true
+      - ENFORCE_LOGIN=false
+      - TESTING=true
+      - TEST_MODE=true
+      
+      # Application settings
+      - FLASK_ENV=testing
+      - PYTHONUNBUFFERED=1
+      - GEVENT_SUPPORT=True
+      
+      # Organization
+      - DEFAULT_ORG=${DEFAULT_ORG:-dagknows}
+      - SUPER_USER_ORG=${SUPER_USER_ORG:-dagknows}
+      
+      # Python path
+      - PYTHONPATH=/app:/app/tests:/app/taskservice/src:/app/req_router/src
+    
+    volumes:
+      # Mount test code
+      - .:/app/tests
+      # Mount source code for testing
+      - ../taskservice/src:/app/taskservice/src:ro
+      - ../req_router/src:/app/req_router/src:ro
+      # Results and logs
+      - ./results:/app/tests/results
+      - ./logs:/app/tests/logs
+    
+    working_dir: /app/tests
+    
+    # Interactive mode for local testing
+    stdin_open: true
+    tty: true
+    
+    # Don't auto-restart
+    restart: "no"
+

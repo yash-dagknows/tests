@@ -1,0 +1,34 @@
+# Dockerfile for test runner
+# This creates a lightweight container with all test dependencies
+
+FROM python:3.10-slim
+
+# Set working directory
+WORKDIR /app/tests
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy test requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy test files
+COPY . .
+
+# Create directories for test results
+RUN mkdir -p /app/tests/results /app/tests/logs
+
+# Set Python path
+ENV PYTHONPATH=/app:/app/tests:/app/taskservice/src:/app/req_router/src
+ENV PYTHONUNBUFFERED=1
+
+# Default command runs all tests
+CMD ["pytest", "-v", "--color=yes", "--junitxml=results/junit.xml", "--html=results/report.html"]
+

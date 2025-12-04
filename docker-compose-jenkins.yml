@@ -1,0 +1,94 @@
+version: '3.8'
+
+# Docker Compose configuration for running tests in Jenkins
+# This connects to the EXISTING saaslocalnetwork where services are already running
+
+networks:
+  saaslocalnetwork:
+    external: true  # Use existing network from dkapp/docker-compose.yml
+
+services:
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: dagknows_jenkins_test_runner_${BUILD_NUMBER:-local}
+    networks:
+      - saaslocalnetwork
+    environment:
+      # Service URLs - use Docker service names, NOT localhost
+      - DAGKNOWS_ELASTIC_URL=http://elasticsearch:9200
+      - DAGKNOWS_TASKSERVICE_URL=http://taskservice:2235
+      - DAGKNOWS_REQ_ROUTER_URL=http://req-router:8888
+      - DAGKNOWS_SETTINGS_URL=http://settings:2225
+      - DAGKNOWS_CONV_MGR_URL=http://conv-mgr:2224
+      - DAGKNOWS_WSFE_URL=http://wsfe:4446
+      
+      # Database connection - use service name
+      - POSTGRESQL_DB_HOST=postgres
+      - POSTGRESQL_DB_PORT=5432
+      - POSTGRESQL_DB_NAME=${POSTGRESQL_DB_NAME:-dagknows}
+      - POSTGRESQL_DB_USER=${POSTGRESQL_DB_USER:-postgres}
+      - POSTGRESQL_DB_PASSWORD=${POSTGRESQL_DB_PASSWORD}
+      
+      # Authentication - inherit from existing services
+      - APP_SECRET_KEY=${APP_SECRET_KEY}
+      - api_key=${api_key}
+      
+      # Test mode settings
+      - ALLOW_DK_USER_INFO_HEADER=true
+      - ENFORCE_LOGIN=false
+      - TESTING=true
+      - TEST_MODE=true
+      - CI=true
+      - JENKINS=true
+      
+      # Application settings
+      - FLASK_ENV=testing
+      - PYTHONUNBUFFERED=1
+      - GEVENT_SUPPORT=True
+      
+      # Test configuration
+      - DEFAULT_ORG=${DEFAULT_ORG:-test-org}
+      - SUPER_USER_ORG=${SUPER_USER_ORG:-dagknows}
+      
+      # Test execution
+      - PYTEST_ARGS=${PYTEST_ARGS:--v --color=yes}
+      
+      # Jenkins-specific
+      - BUILD_NUMBER=${BUILD_NUMBER:-0}
+      - JOB_NAME=${JOB_NAME:-local}
+      - WORKSPACE=${WORKSPACE:-/app}
+    
+    volumes:
+      # Mount test code
+      - .:/app/tests
+      # Mount source code as read-only
+      - ../taskservice/src:/app/taskservice/src:ro
+      - ../req_router/src:/app/req_router/src:ro
+      # Results directory
+      - test_results:/app/tests/results
+      # Logs
+      - test_logs:/app/tests/logs
+    
+    working_dir: /app/tests
+    
+    # Default command - can be overridden in Jenkins
+    command: >
+      sh -c "
+        echo 'Starting test execution...' &&
+        echo 'Environment: Jenkins/Docker' &&
+        echo 'Build: ${JOB_NAME:-local} #${BUILD_NUMBER:-0}' &&
+        echo 'Test args: ${PYTEST_ARGS}' &&
+        pytest ${PYTEST_ARGS}
+      "
+    
+    # Don't restart - let Jenkins manage lifecycle
+    restart: "no"
+
+volumes:
+  test_results:
+    name: dagknows_test_results_${BUILD_NUMBER:-local}
+  test_logs:
+    name: dagknows_test_logs_${BUILD_NUMBER:-local}
+

@@ -1,0 +1,284 @@
+// Jenkinsfile for DagKnows Test Suite - Production Jenkins Environment
+// This pipeline works with your existing Terraform-managed Jenkins agents
+
+pipeline {
+    agent {
+        // Use your ECS Docker agent
+        label 'docker-agent'
+    }
+    
+    // Environment variables from credentials and parameters
+    environment {
+        // Sensitive credentials (configure these in Jenkins)
+        APP_SECRET_KEY = credentials('dagknows-app-secret-key')
+        POSTGRESQL_DB_PASSWORD = credentials('dagknows-postgres-password')
+        api_key = credentials('dagknows-api-key')
+        
+        // Database configuration
+        POSTGRESQL_DB_HOST = 'postgres'
+        POSTGRESQL_DB_PORT = '5432'
+        POSTGRESQL_DB_NAME = 'dagknows'
+        POSTGRESQL_DB_USER = 'postgres'
+        
+        // Organization settings
+        DEFAULT_ORG = 'dagknows'
+        SUPER_USER_ORG = 'dagknows'
+        
+        // Test configuration
+        TESTING = 'true'
+        CI = 'true'
+        JENKINS = 'true'
+        
+        // Build info
+        BUILD_NUMBER = "${env.BUILD_NUMBER}"
+        JOB_NAME = "${env.JOB_NAME}"
+        WORKSPACE = "${env.WORKSPACE}"
+    }
+    
+    // Build parameters
+    parameters {
+        choice(
+            name: 'TEST_SUITE',
+            choices: ['unit', 'integration', 'e2e', 'smoke', 'all'],
+            description: 'Which test suite to run'
+        )
+        booleanParam(
+            name: 'RUN_COVERAGE',
+            defaultValue: true,
+            description: 'Generate coverage report'
+        )
+        booleanParam(
+            name: 'STOP_ON_FAILURE',
+            defaultValue: false,
+            description: 'Stop on first test failure (for debugging)'
+        )
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "Checking out code for ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+                checkout scm
+            }
+        }
+        
+        stage('Environment Check') {
+            steps {
+                echo 'Checking Docker and service availability...'
+                sh '''
+                    docker --version
+                    docker-compose --version
+                    
+                    # Check if saaslocalnetwork exists
+                    if docker network ls | grep -q saaslocalnetwork; then
+                        echo "✓ saaslocalnetwork found"
+                    else
+                        echo "✗ saaslocalnetwork not found - creating..."
+                        docker network create saaslocalnetwork
+                    fi
+                    
+                    # Check if services are running
+                    echo "Checking service availability..."
+                    docker ps --filter "network=saaslocalnetwork" --format "table {{.Names}}\t{{.Status}}" || true
+                '''
+            }
+        }
+        
+        stage('Quick Validation') {
+            when {
+                expression { params.TEST_SUITE == 'unit' }
+            }
+            steps {
+                echo 'Running quick unit tests (no services required)...'
+                dir('tests') {
+                    sh '''
+                        # Install dependencies
+                        python3 -m venv venv
+                        . venv/bin/activate
+                        pip install --upgrade pip
+                        pip install -r requirements.txt
+                        
+                        # Run unit tests
+                        export PYTEST_ARGS="unit/ -v --tb=short --junitxml=results/junit-unit.xml"
+                        pytest $PYTEST_ARGS || exit 1
+                    '''
+                }
+            }
+        }
+        
+        stage('Service Health Check') {
+            when {
+                expression { params.TEST_SUITE != 'unit' }
+            }
+            steps {
+                echo 'Checking if required services are healthy...'
+                dir('tests') {
+                    sh '''
+                        # Make script executable
+                        chmod +x ci/wait-for-services-jenkins.sh
+                        
+                        # Run health check
+                        ./ci/wait-for-services-jenkins.sh || {
+                            echo "ERROR: Services are not healthy"
+                            echo "Checking service status..."
+                            docker ps --filter "network=saaslocalnetwork" || true
+                            exit 1
+                        }
+                    '''
+                }
+            }
+        }
+        
+        stage('Run Tests') {
+            steps {
+                script {
+                    dir('tests') {
+                        // Build pytest arguments
+                        def pytest_args = "-v --color=yes --tb=short"
+                        pytest_args += " --junitxml=results/junit.xml"
+                        pytest_args += " --html=results/report.html --self-contained-html"
+                        
+                        if (params.STOP_ON_FAILURE) {
+                            pytest_args += " -x"
+                        }
+                        
+                        if (params.RUN_COVERAGE) {
+                            pytest_args += " --cov=../taskservice/src --cov=../req_router/src"
+                            pytest_args += " --cov-report=xml:results/coverage.xml"
+                            pytest_args += " --cov-report=html:results/htmlcov"
+                            pytest_args += " --cov-report=term-missing"
+                        }
+                        
+                        // Select test suite
+                        def test_path = ""
+                        switch(params.TEST_SUITE) {
+                            case 'unit':
+                                test_path = "unit/"
+                                break
+                            case 'integration':
+                                test_path = "integration/"
+                                break
+                            case 'e2e':
+                                test_path = "e2e/"
+                                break
+                            case 'smoke':
+                                pytest_args += " -m smoke"
+                                break
+                            default:
+                                test_path = ""
+                        }
+                        
+                        pytest_args += " ${test_path}"
+                        
+                        echo "Running tests with: ${pytest_args}"
+                        
+                        // Run tests in Docker container on same network
+                        sh """
+                            export PYTEST_ARGS='${pytest_args}'
+                            
+                            # Run test container
+                            docker-compose -f docker-compose-jenkins.yml run \
+                                --rm \
+                                --name test-runner-${BUILD_NUMBER} \
+                                test-runner || {
+                                    echo "Tests failed!"
+                                    exit 1
+                                }
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Collect Logs') {
+            when {
+                expression { params.TEST_SUITE != 'unit' }
+            }
+            steps {
+                echo 'Collecting service logs for debugging...'
+                dir('tests') {
+                    sh '''
+                        mkdir -p results/logs
+                        
+                        # Collect logs from services
+                        for service in taskservice req-router settings elasticsearch postgres; do
+                            echo "Collecting logs for $service..."
+                            docker logs $service > results/logs/${service}.log 2>&1 || echo "Could not get logs for $service"
+                        done
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo 'Publishing test results...'
+            
+            // Publish JUnit results
+            junit allowEmptyResults: true, testResults: 'tests/results/junit*.xml'
+            
+            // Publish HTML report
+            publishHTML([
+                allowMissing: false,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: 'tests/results',
+                reportFiles: 'report.html',
+                reportName: 'Test Report',
+                reportTitles: ''
+            ])
+            
+            // Publish coverage if available
+            script {
+                if (params.RUN_COVERAGE && fileExists('tests/results/coverage.xml')) {
+                    echo 'Publishing coverage report...'
+                    
+                    // Cobertura coverage
+                    publishCoverage adapters: [
+                        coberturaAdapter('tests/results/coverage.xml')
+                    ]
+                    
+                    // HTML coverage report
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'tests/results/htmlcov',
+                        reportFiles: 'index.html',
+                        reportName: 'Coverage Report',
+                        reportTitles: ''
+                    ])
+                }
+            }
+            
+            // Archive artifacts
+            archiveArtifacts artifacts: 'tests/results/**/*', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'tests/results/logs/*.log', allowEmptyArchive: true
+            
+            // Cleanup test container
+            dir('tests') {
+                sh '''
+                    docker-compose -f docker-compose-jenkins.yml down --remove-orphans || true
+                    docker volume rm dagknows_test_results_${BUILD_NUMBER} || true
+                    docker volume rm dagknows_test_logs_${BUILD_NUMBER} || true
+                '''
+            }
+        }
+        
+        success {
+            echo '✓ Tests passed successfully!'
+            // Add notifications (Slack, email, etc.)
+        }
+        
+        failure {
+            echo '✗ Tests failed!'
+            // Add failure notifications
+        }
+        
+        unstable {
+            echo '⚠ Tests are unstable!'
+        }
+    }
+}
+

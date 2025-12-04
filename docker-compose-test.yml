@@ -1,0 +1,227 @@
+version: '3.8'
+
+# Docker Compose configuration for running integration and E2E tests
+# This spins up all necessary services in isolated test environment
+
+services:
+  # ========================================
+  # Infrastructure Services
+  # ========================================
+  
+  postgres:
+    image: postgres:15-alpine
+    container_name: dagknows_test_postgres
+    environment:
+      POSTGRES_DB: dagknows_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: testpassword123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      - "54321:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - test_network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.2
+    container_name: dagknows_test_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - bootstrap.memory_lock=true
+      - logger.level=WARN
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "9300:9200"
+    volumes:
+      - es_test_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks:
+      - test_network
+
+  # ========================================
+  # Application Services
+  # ========================================
+
+  taskservice:
+    build:
+      context: ../taskservice
+      dockerfile: Dockerfile.debug
+    container_name: dagknows_test_taskservice
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - DAGKNOWS_ELASTIC_URL=http://elasticsearch:9200
+      - POSTGRESQL_DB_HOST=postgres
+      - POSTGRESQL_DB_PORT=5432
+      - POSTGRESQL_DB_NAME=dagknows_test
+      - POSTGRESQL_DB_USER=postgres
+      - POSTGRESQL_DB_PASSWORD=testpassword123
+      - FLASK_ENV=testing
+      - PYTHONUNBUFFERED=1
+      - GEVENT_SUPPORT=True
+      - ALLOW_DK_USER_INFO_HEADER=true
+      - ENFORCE_LOGIN=false
+      - DEFAULT_ORG=test-org
+      - TESTING=true
+    ports:
+      - "2235:2235"
+      - "50051:50051"  # gRPC port
+    volumes:
+      - ../taskservice/src:/usr/src/app/src:ro
+      - test_logs:/usr/src/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2235/api/v1/tasks/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - test_network
+
+  req-router:
+    build:
+      context: ../req_router
+      dockerfile: Dockerfile.debug
+    container_name: dagknows_test_req_router
+    depends_on:
+      taskservice:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - DAGKNOWS_TASKSERVICE_URL=http://taskservice:2235
+      - DAGKNOWS_ELASTIC_URL=http://elasticsearch:9200
+      - POSTGRESQL_DB_HOST=postgres
+      - POSTGRESQL_DB_PORT=5432
+      - POSTGRESQL_DB_NAME=dagknows_test
+      - POSTGRESQL_DB_USER=postgres
+      - POSTGRESQL_DB_PASSWORD=testpassword123
+      - FLASK_ENV=testing
+      - PYTHONUNBUFFERED=1
+      - ALLOW_DK_USER_INFO_HEADER=true
+      - ENFORCE_LOGIN=false
+      - DEFAULT_ORG=test-org
+      - SECRET_KEY=test-secret-key
+      - USER_ENABLE_EMAIL=false
+      - TESTING=true
+    ports:
+      - "8888:8888"
+    volumes:
+      - ../req_router/src:/usr/src/app/src:ro
+      - test_logs:/usr/src/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - test_network
+
+  settings:
+    build:
+      context: ../settings
+      dockerfile: Dockerfile.debug
+    container_name: dagknows_test_settings
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - DAGKNOWS_ELASTIC_URL=http://elasticsearch:9200
+      - POSTGRESQL_DB_HOST=postgres
+      - POSTGRESQL_DB_PORT=5432
+      - POSTGRESQL_DB_NAME=dagknows_test
+      - POSTGRESQL_DB_USER=postgres
+      - POSTGRESQL_DB_PASSWORD=testpassword123
+      - FLASK_ENV=testing
+      - PYTHONUNBUFFERED=1
+      - TESTING=true
+    ports:
+      - "2225:2225"
+    volumes:
+      - ../settings/src:/usr/src/app/src:ro
+      - test_logs:/usr/src/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2225/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - test_network
+
+  # ========================================
+  # Test Runner Service
+  # ========================================
+  
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: dagknows_test_runner
+    depends_on:
+      req-router:
+        condition: service_healthy
+      taskservice:
+        condition: service_healthy
+      settings:
+        condition: service_healthy
+    environment:
+      - DAGKNOWS_REQ_ROUTER_URL=http://req-router:8888
+      - DAGKNOWS_TASKSERVICE_URL=http://taskservice:2235
+      - DAGKNOWS_SETTINGS_URL=http://settings:2225
+      - DAGKNOWS_ELASTIC_URL=http://elasticsearch:9200
+      - POSTGRESQL_DB_HOST=postgres
+      - POSTGRESQL_DB_PORT=5432
+      - POSTGRESQL_DB_NAME=dagknows_test
+      - POSTGRESQL_DB_USER=postgres
+      - POSTGRESQL_DB_PASSWORD=testpassword123
+      - PYTHONUNBUFFERED=1
+      - PYTEST_ARGS=${PYTEST_ARGS:--v}
+    volumes:
+      - .:/app/tests
+      - ../taskservice/src:/app/taskservice/src:ro
+      - ../req_router/src:/app/req_router/src:ro
+      - test_results:/app/tests/results
+    working_dir: /app/tests
+    command: pytest ${PYTEST_ARGS:--v --color=yes}
+    networks:
+      - test_network
+
+networks:
+  test_network:
+    driver: bridge
+    name: dagknows_test_network
+
+volumes:
+  postgres_test_data:
+    name: dagknows_test_postgres_data
+  es_test_data:
+    name: dagknows_test_es_data
+  test_logs:
+    name: dagknows_test_logs
+  test_results:
+    name: dagknows_test_results
+
