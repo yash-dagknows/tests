@@ -116,20 +116,20 @@ test-unit: check-env check-venv ## Run unit tests (fast, no services needed)
 
 test-unit-docker: check-dkapp ## Run unit tests in Docker container
 	@echo "$(GREEN)Running unit tests in Docker...$(NC)"
-	@set -a && . .env.local && set +a && \
+	@export $$(grep -v '^#' .env.local | xargs) && \
 	docker-compose --env-file .env.local -f docker-compose-local.yml run --rm test-runner \
 		pytest unit/ -v --tb=short --color=yes
 
 test-quick: check-dkapp ## Run quick smoke tests
 	@echo "$(GREEN)Running quick smoke tests...$(NC)"
-	@set -a && . .env.local && set +a && \
+	@export $$(grep -v '^#' .env.local | xargs) && \
 	docker-compose --env-file .env.local -f docker-compose-local.yml run --rm test-runner \
 		pytest -m smoke -v --tb=short --color=yes
 
 test-integration: check-dkapp ## Run integration tests (requires dkapp services)
 	@echo "$(GREEN)Running integration tests...$(NC)"
 	@echo "$(YELLOW)This requires all dkapp services to be running$(NC)"
-	@set -a && . .env.local && set +a && \
+	@export $$(grep -v '^#' .env.local | xargs) && \
 	docker-compose --env-file .env.local -f docker-compose-local.yml run --rm test-runner \
 		pytest integration/ -v --tb=short --color=yes
 
