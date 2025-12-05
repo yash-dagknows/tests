@@ -143,11 +143,12 @@ class TaskServiceClient(APIClient):
     def update_task(self, task_id: str, updates: Dict, update_fields: List[str] = None) -> Dict:
         """Update a task."""
         # TaskService API expects updates wrapped in "task" key
+        # and uses "update_mask" (not "update_fields") for field list
         task_updates = updates.copy()
         if update_fields:
             payload = {
                 "task": task_updates,
-                "update_fields": update_fields
+                "update_mask": update_fields  # API uses "update_mask"
             }
         else:
             payload = {"task": task_updates}
