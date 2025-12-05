@@ -32,6 +32,7 @@ def test_elasticsearch_indices_exist_or_create():
         f"{org}__workspaces_alias",
         f"{org}__nodes_alias",
         f"{org}__dags_alias",
+        "public__settings",  # Settings index (shared)
     ]
     
     print(f"\nChecking Elasticsearch indices for org: {org}")

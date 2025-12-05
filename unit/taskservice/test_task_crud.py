@@ -30,7 +30,12 @@ class TestTaskCRUD:
         # Verify data matches
         assert created_task["title"] == task_data["title"]
         assert created_task["description"] == task_data["description"]
-        assert created_task["script"] == task_data["script"]
+        
+        # Script may be returned as string or as {"lang": "...", "code": "..."}
+        if isinstance(created_task["script"], dict):
+            assert created_task["script"]["code"] == task_data["script"]
+        else:
+            assert created_task["script"] == task_data["script"]
         
         # Cleanup
         taskservice_client.delete_task(created_task["id"])
