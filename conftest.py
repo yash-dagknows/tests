@@ -250,12 +250,13 @@ def test_tenant(test_config, req_router_client, test_admin):
     
     logger.info(f"Creating test tenant: {tenant_data['organization']}")
     
+    tenant = None  # Initialize to avoid UnboundLocalError
     try:
         tenant = req_router_client.create_tenant(tenant_data)
         tenant["password"] = tenant_data["password"]
         yield tenant
     finally:
-        if test_config["auto_cleanup"]:
+        if test_config["auto_cleanup"] and tenant is not None:
             try:
                 logger.info(f"Cleaning up test tenant: {tenant_data['organization']}")
                 req_router_client.delete_tenant(tenant["id"])
@@ -279,15 +280,18 @@ def test_task(authenticated_user, taskservice_client):
     
     logger.info(f"Creating test task: {task_data['title']}")
     
+    task = None  # Initialize to avoid UnboundLocalError
     try:
-        task = taskservice_client.create_task(task_data)
+        response = taskservice_client.create_task(task_data)
+        task = response.get("task", response)  # Handle wrapped response
         yield task
     finally:
-        try:
-            logger.info(f"Cleaning up test task: {task['id']}")
-            taskservice_client.delete_task(task["id"])
-        except Exception as e:
-            logger.warning(f"Failed to cleanup task: {e}")
+        if task is not None:
+            try:
+                logger.info(f"Cleaning up test task: {task['id']}")
+                taskservice_client.delete_task(task["id"])
+            except Exception as e:
+                logger.warning(f"Failed to cleanup task: {e}")
 
 @pytest.fixture(scope="function")
 def test_tasks(authenticated_user, taskservice_client):
@@ -304,7 +308,8 @@ def test_tasks(authenticated_user, taskservice_client):
                 "script_type": "shell",
                 "tags": ["test", f"task-{i}"],
             }
-            task = taskservice_client.create_task(task_data)
+            response = taskservice_client.create_task(task_data)
+            task = response.get("task", response)  # Handle wrapped response
             tasks.append(task)
             task_ids.append(task["id"])
         
@@ -330,15 +335,18 @@ def test_workspace(authenticated_user, taskservice_client):
     
     logger.info(f"Creating test workspace: {workspace_data['name']}")
     
+    workspace = None  # Initialize to avoid UnboundLocalError
     try:
-        workspace = taskservice_client.create_workspace(workspace_data)
+        response = taskservice_client.create_workspace(workspace_data)
+        workspace = response.get("workspace", response)  # Handle wrapped response
         yield workspace
     finally:
-        try:
-            logger.info(f"Cleaning up test workspace: {workspace['id']}")
-            taskservice_client.delete_workspace(workspace["id"])
-        except Exception as e:
-            logger.warning(f"Failed to cleanup workspace: {e}")
+        if workspace is not None:
+            try:
+                logger.info(f"Cleaning up test workspace: {workspace['id']}")
+                taskservice_client.delete_workspace(workspace["id"])
+            except Exception as e:
+                logger.warning(f"Failed to cleanup workspace: {e}")
 
 # ============================================================================
 # Database Fixtures
