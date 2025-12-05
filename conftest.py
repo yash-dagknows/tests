@@ -106,22 +106,54 @@ def api_client(test_config, wait_for_services):
     )
     return client
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def taskservice_client(test_config, wait_for_services):
-    """Provides a TaskService-specific API client."""
+    """Provides a TaskService-specific API client with test user authentication."""
     client = TaskServiceClient(
         base_url=test_config["taskservice_url"],
         test_mode=True
     )
+    
+    # Automatically set test user info for all tests
+    actual_org = os.getenv("DEFAULT_ORG") or test_config.get("test_org", "dagknows")
+    
+    user_info = {
+        "uid": "1",
+        "uname": "test@dagknows.com",
+        "first_name": "Test",
+        "last_name": "User",
+        "org": actual_org.lower(),
+        "role": "Admin"
+    }
+    
+    client.set_user_info(user_info)
+    logger.debug(f"TaskService client configured with org: {actual_org}")
+    
     return client
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def req_router_client(test_config, wait_for_services):
-    """Provides a ReqRouter-specific API client."""
+    """Provides a ReqRouter-specific API client with test user authentication."""
     client = ReqRouterClient(
         base_url=test_config["req_router_url"],
         test_mode=True
     )
+    
+    # Automatically set test user info for all tests
+    actual_org = os.getenv("DEFAULT_ORG") or test_config.get("test_org", "dagknows")
+    
+    user_info = {
+        "uid": "1",
+        "uname": "test@dagknows.com",
+        "first_name": "Test",
+        "last_name": "User",
+        "org": actual_org.lower(),
+        "role": "Admin"
+    }
+    
+    client.set_user_info(user_info)
+    logger.debug(f"ReqRouter client configured with org: {actual_org}")
+    
     return client
 
 # ============================================================================

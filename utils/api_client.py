@@ -132,7 +132,9 @@ class TaskServiceClient(APIClient):
     
     def create_task(self, task_data: Dict) -> Dict:
         """Create a new task."""
-        return self.post(f"{self.api_base}/tasks", task_data)
+        # TaskService API expects task data wrapped in "task" key
+        payload = {"task": task_data}
+        return self.post(f"{self.api_base}/tasks", payload)
     
     def get_task(self, task_id: str) -> Dict:
         """Get task by ID."""
@@ -140,9 +142,15 @@ class TaskServiceClient(APIClient):
     
     def update_task(self, task_id: str, updates: Dict, update_fields: List[str] = None) -> Dict:
         """Update a task."""
-        payload = updates.copy()
+        # TaskService API expects updates wrapped in "task" key
+        task_updates = updates.copy()
         if update_fields:
-            payload['update_fields'] = update_fields
+            payload = {
+                "task": task_updates,
+                "update_fields": update_fields
+            }
+        else:
+            payload = {"task": task_updates}
         return self.patch(f"{self.api_base}/tasks/{task_id}", payload)
     
     def delete_task(self, task_id: str) -> Dict:
@@ -165,7 +173,9 @@ class TaskServiceClient(APIClient):
     
     def create_workspace(self, workspace_data: Dict) -> Dict:
         """Create a new workspace."""
-        return self.post(f"{self.api_base}/workspaces", workspace_data)
+        # TaskService API expects workspace data wrapped in "workspace" key
+        payload = {"workspace": workspace_data}
+        return self.post(f"{self.api_base}/workspaces", payload)
     
     def get_workspace(self, workspace_id: str) -> Dict:
         """Get workspace by ID."""
@@ -173,7 +183,9 @@ class TaskServiceClient(APIClient):
     
     def update_workspace(self, workspace_id: str, updates: Dict) -> Dict:
         """Update a workspace."""
-        return self.patch(f"{self.api_base}/workspaces/{workspace_id}", updates)
+        # TaskService API expects updates wrapped in "workspace" key
+        payload = {"workspace": updates}
+        return self.patch(f"{self.api_base}/workspaces/{workspace_id}", payload)
     
     def delete_workspace(self, workspace_id: str) -> Dict:
         """Delete a workspace."""
