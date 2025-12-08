@@ -188,96 +188,166 @@ docker-compose -f docker-compose-local.yml run --rm test-runner \
 
 ### Task CRUD Tests (unit/taskservice/test_task_crud.py)
 
+**Note**: Tests are organized by task type (Python, PowerShell, Command) to match supported script_types.
+
 #### Run All CRUD Tests
 
 ```bash
 cd ~/tests
 
-# All tests in file
+# All tests in file (26 tests)
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_crud.py -v
-
-# Only TestTaskCRUD class
-docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskCRUD -v
 ```
 
-#### TestTaskCRUD - Basic Operations
+#### TestPythonTaskCRUD - Python Script Tasks (6 tests)
 
 ```bash
-# Test 16: Create basic task
+# Run all Python task tests
 docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskCRUD::test_create_basic_task -v
+    pytest unit/taskservice/test_task_crud.py::TestPythonTaskCRUD -v
 
-# Test 17: Create task with custom ID
+# Test 16: Create Python task
 docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskCRUD::test_create_task_with_custom_id -v
+    pytest unit/taskservice/test_task_crud.py::TestPythonTaskCRUD::test_create_python_task -v
 
-# Test 18: Create task duplicate ID fails
+# Test 17: Create Python task with custom ID
 docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskCRUD::test_create_task_duplicate_id_fails -v
+    pytest unit/taskservice/test_task_crud.py::TestPythonTaskCRUD::test_create_python_task_with_custom_id -v
 
-# Test 19: Get task
+# Test 18: Get Python task
 docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskCRUD::test_get_task -v
+    pytest unit/taskservice/test_task_crud.py::TestPythonTaskCRUD::test_get_python_task -v
 
-# Test 20: Get nonexistent task fails
+# Test 19: Update Python task script
 docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskCRUD::test_get_nonexistent_task_fails -v
+    pytest unit/taskservice/test_task_crud.py::TestPythonTaskCRUD::test_update_python_task -v
 
-# Test 21: Update task
+# Test 20: Update Python task metadata
 docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskCRUD::test_update_task -v
+    pytest unit/taskservice/test_task_crud.py::TestPythonTaskCRUD::test_update_python_task_metadata -v
 
-# Test 22: Update task script
+# Test 21: Delete Python task
 docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskCRUD::test_update_task_script -v
-
-# Test 23: Delete task
-docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskCRUD::test_delete_task -v
-
-# Test 24: Delete nonexistent task fails
-docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskCRUD::test_delete_nonexistent_task_fails -v
+    pytest unit/taskservice/test_task_crud.py::TestPythonTaskCRUD::test_delete_python_task -v
 ```
 
-#### TestTaskWithCommands - Command-Based Tasks
+#### TestPowerShellTaskCRUD - PowerShell Script Tasks (3 tests)
 
 ```bash
-# Test 25: Create task with commands
+# Run all PowerShell task tests
 docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskWithCommands::test_create_task_with_commands -v
+    pytest unit/taskservice/test_task_crud.py::TestPowerShellTaskCRUD -v
 
-# Test 26: Update task commands
+# Test 22: Create PowerShell task
 docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskWithCommands::test_update_task_commands -v
+    pytest unit/taskservice/test_task_crud.py::TestPowerShellTaskCRUD::test_create_powershell_task -v
+
+# Test 23: Get PowerShell task
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestPowerShellTaskCRUD::test_get_powershell_task -v
+
+# Test 24: Update PowerShell task script
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestPowerShellTaskCRUD::test_update_powershell_task_script -v
 ```
 
-#### TestTaskWithParameters - Parametrized Tasks
+#### TestCommandTaskCRUD - Command-Type Tasks (7 tests)
 
 ```bash
-# Test 27: Create task with params
+# Run all Command task tests
 docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskWithParameters::test_create_task_with_params -v
+    pytest unit/taskservice/test_task_crud.py::TestCommandTaskCRUD -v
 
-# Test 28: Task param validation
+# Test 25: Create command task
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestCommandTaskCRUD::test_create_command_task -v
+
+# Test 26: Create command task with custom ID
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestCommandTaskCRUD::test_create_command_task_with_custom_id -v
+
+# Test 27: Get command task
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestCommandTaskCRUD::test_get_command_task -v
+
+# Test 28: Update command task commands
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestCommandTaskCRUD::test_update_command_task_commands -v
+
+# Test 29: Update command task add commands
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestCommandTaskCRUD::test_update_command_task_add_commands -v
+
+# Test 30: Update command task metadata
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestCommandTaskCRUD::test_update_command_task_metadata -v
+
+# Test 31: Delete command task
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestCommandTaskCRUD::test_delete_command_task -v
+```
+
+#### TestTaskGeneralOperations - General Task Operations (3 tests)
+
+```bash
+# Run all general operation tests
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestTaskGeneralOperations -v
+
+# Test 32: Create task with duplicate ID fails
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestTaskGeneralOperations::test_create_task_duplicate_id_fails -v
+
+# Test 33: Get nonexistent task fails
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestTaskGeneralOperations::test_get_nonexistent_task_fails -v
+
+# Test 34: Delete nonexistent task is idempotent
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestTaskGeneralOperations::test_delete_nonexistent_task_idempotent -v
+```
+
+#### TestTaskWithParameters - Parametrized Tasks (3 tests)
+
+```bash
+# Run all parameter tests
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestTaskWithParameters -v
+
+# Test 35: Create Python task with params
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestTaskWithParameters::test_create_python_task_with_params -v
+
+# Test 36: Create command task with params
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestTaskWithParameters::test_create_command_task_with_params -v
+
+# Test 37: Task param validation
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_crud.py::TestTaskWithParameters::test_task_param_validation -v
 ```
 
-#### TestTaskTags - Tag Management
+#### TestTaskTags - Tag Management (4 tests)
 
 ```bash
-# Test 29: Create task with tags
+# Run all tag tests
 docker-compose -f docker-compose-local.yml run --rm test-runner \
-    pytest unit/taskservice/test_task_crud.py::TestTaskTags::test_create_task_with_tags -v
+    pytest unit/taskservice/test_task_crud.py::TestTaskTags -v
 
-# Test 30: Update task tags
+# Test 38: Create Python task with tags
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestTaskTags::test_create_python_task_with_tags -v
+
+# Test 39: Create command task with tags
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_crud.py::TestTaskTags::test_create_command_task_with_tags -v
+
+# Test 40: Update task tags
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_crud.py::TestTaskTags::test_update_task_tags -v
 
-# Test 31: Clear task tags
+# Test 41: Clear task tags
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_crud.py::TestTaskTags::test_clear_task_tags -v
 ```
@@ -303,19 +373,19 @@ docker-compose -f docker-compose-local.yml run --rm test-runner \
 #### TestTaskSearch - Search Operations
 
 ```bash
-# Test 32: Search tasks by title
+# Test 42: Search tasks by title
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py::TestTaskSearch::test_search_tasks_by_title -v
 
-# Test 33: Search tasks by tag
+# Test 43: Search tasks by tag
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py::TestTaskSearch::test_search_tasks_by_tag -v
 
-# Test 34: Search tasks by description
+# Test 44: Search tasks by description
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py::TestTaskSearch::test_search_tasks_by_description -v
 
-# Test 35: Search nonexistent task
+# Test 45: Search nonexistent task
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py::TestTaskSearch::test_search_nonexistent_task -v
 ```
@@ -323,15 +393,15 @@ docker-compose -f docker-compose-local.yml run --rm test-runner \
 #### TestTaskList - List Operations
 
 ```bash
-# Test 36: List tasks
+# Test 46: List tasks
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py::TestTaskList::test_list_tasks -v
 
-# Test 37: List tasks with pagination
+# Test 47: List tasks with pagination
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py::TestTaskList::test_list_tasks_with_pagination -v
 
-# Test 38: List tasks with filters
+# Test 48: List tasks with filters
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py::TestTaskList::test_list_tasks_with_filters -v
 ```
@@ -357,23 +427,23 @@ docker-compose -f docker-compose-local.yml run --rm test-runner \
 #### TestWorkspaceCRUD - Workspace Operations
 
 ```bash
-# Test 39: Create workspace
+# Test 49: Create workspace
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceCRUD::test_create_workspace -v
 
-# Test 40: Get workspace
+# Test 50: Get workspace
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceCRUD::test_get_workspace -v
 
-# Test 41: Update workspace
+# Test 51: Update workspace
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceCRUD::test_update_workspace -v
 
-# Test 42: Delete workspace
+# Test 52: Delete workspace
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceCRUD::test_delete_workspace -v
 
-# Test 43: List workspaces
+# Test 53: List workspaces
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceCRUD::test_list_workspaces -v
 ```
@@ -381,11 +451,11 @@ docker-compose -f docker-compose-local.yml run --rm test-runner \
 #### TestWorkspaceTaskAssociation - Workspace-Task Relations
 
 ```bash
-# Test 44: Create task in workspace
+# Test 54: Create task in workspace
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceTaskAssociation::test_create_task_in_workspace -v
 
-# Test 45: List tasks in workspace
+# Test 55: List tasks in workspace
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceTaskAssociation::test_list_tasks_in_workspace -v
 ```
