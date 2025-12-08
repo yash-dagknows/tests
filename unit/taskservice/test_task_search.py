@@ -138,11 +138,16 @@ class TestTaskList:
     
     def test_list_tasks_with_pagination(self, taskservice_client):
         """Test listing tasks with pagination."""
-        # Get first page
-        response = taskservice_client.list_tasks(params={"size": 5, "from": 0})
+        # Backend uses 'page_size' and 'page_key' for pagination
+        response = taskservice_client.list_tasks(params={"page_size": 5, "page_key": "0"})
         
         tasks = response.get("tasks", response.get("hits", []))
-        assert len(tasks) <= 5
+        assert len(tasks) <= 5, f"Expected at most 5 tasks, got {len(tasks)}"
+        
+        # Verify pagination response exists
+        pagination = response.get("pagination", {})
+        assert "next_page_key" in pagination
+        assert "has_more_results" in pagination
     
     def test_list_tasks_with_filters(self, taskservice_client, test_data_factory):
         """Test listing tasks with filters."""
