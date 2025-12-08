@@ -52,21 +52,21 @@ When no `wsid` is provided:
 
 **After (Fixed)**:
 ```python
-def delete_task(self, task_id: str, wsid: str = "") -> Dict:
+def delete_task(self, task_id: str, wsid: str = "__DEFAULT__") -> Dict:
     """Delete a task.
     
     Args:
         task_id: ID of the task to delete
-        wsid: Workspace ID (empty string for default workspace)
+        wsid: Workspace ID ("__DEFAULT__" for default workspace, as frontend does)
     """
-    params = {"wsid": wsid} if wsid is not None else {"wsid": ""}
+    params = {"wsid": wsid}
     return self.delete(f"{self.api_base}/tasks/{task_id}", params=params)
 ```
 
 **Key Points:**
-- Default `wsid=""` (empty string for default workspace)
+- Default `wsid="__DEFAULT__"` (matches frontend behavior!)
 - Always passes `wsid` parameter to DELETE endpoint
-- Backend converts empty string to proper workspace context
+- Backend converts `"__DEFAULT__"` to `""` internally (see `service.py` line 987)
 
 ### Files Modified
 
@@ -128,7 +128,17 @@ pytest unit/taskservice/test_task_search.py::TestTaskSearch::test_search_with_kn
 
 **Example:**
 ```bash
-DELETE /api/v1/tasks/ABC123?wsid=
+# Default workspace
+DELETE /api/v1/tasks/ABC123?wsid=__DEFAULT__
+
+# Specific workspace
+DELETE /api/v1/tasks/ABC123?wsid=workspace123
+```
+
+**Important:** The backend converts `__DEFAULT__` to empty string internally (line 987 in `service.py`):
+```python
+if wsid == "__DEFAULT__":
+    wsid = ""
 ```
 
 ## 💡 Why This Wasn't Caught Earlier
@@ -173,6 +183,23 @@ docker-compose -f docker-compose-local.yml run --rm test-runner \
 # Check database - should have no orphaned test tasks
 # (Run before and after tests to see cleanup working)
 ```
+
+---
+
+## 🔍 Frontend Discovery
+
+By examining the frontend code (`dagknows_nuxt/composables/deleteTask.js` lines 4-7), we discovered:
+
+```javascript
+let wsid = current_space_state.value;
+if (wsid == "") {
+    wsid = "__DEFAULT__"  // Frontend sends "__DEFAULT__" not ""!
+}
+```
+
+**This was the KEY to fixing the issue!** 
+
+The frontend ALWAYS sends `wsid="__DEFAULT__"` for tasks in the default workspace, not an empty string. The backend then converts `"__DEFAULT__"` to `""` internally for processing.
 
 ---
 

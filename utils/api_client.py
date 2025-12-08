@@ -154,14 +154,14 @@ class TaskServiceClient(APIClient):
             payload = {"task": task_updates}
         return self.patch(f"{self.api_base}/tasks/{task_id}", payload)
     
-    def delete_task(self, task_id: str, wsid: str = "") -> Dict:
+    def delete_task(self, task_id: str, wsid: str = "__DEFAULT__") -> Dict:
         """Delete a task.
         
         Args:
             task_id: ID of the task to delete
-            wsid: Workspace ID (empty string for default workspace)
+            wsid: Workspace ID ("__DEFAULT__" for default workspace, as frontend does)
         """
-        params = {"wsid": wsid} if wsid is not None else {"wsid": ""}
+        params = {"wsid": wsid}
         return self.delete(f"{self.api_base}/tasks/{task_id}", params=params)
     
     def list_tasks(self, params: Optional[Dict] = None) -> Dict:
@@ -333,14 +333,14 @@ class ReqRouterClient(APIClient):
         """Update task (proxied to TaskService)."""
         return self.patch(f'/api/tasks/{task_id}', updates)
     
-    def delete_task(self, task_id: str, wsid: str = "") -> Dict:
+    def delete_task(self, task_id: str, wsid: str = "__DEFAULT__") -> Dict:
         """Delete task (proxied to TaskService).
         
         Args:
             task_id: ID of the task to delete
-            wsid: Workspace ID (empty string for default workspace)
+            wsid: Workspace ID ("__DEFAULT__" for default workspace, as frontend does)
         """
-        params = {"wsid": wsid} if wsid is not None else {"wsid": ""}
+        params = {"wsid": wsid}
         return self.delete(f'/api/tasks/{task_id}', params=params)
     
     def search_tasks(self, query: str) -> Dict:
