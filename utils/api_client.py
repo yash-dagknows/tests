@@ -163,10 +163,11 @@ class TaskServiceClient(APIClient):
         return self.get(f"{self.api_base}/tasks", params=params)
     
     def search_tasks(self, query: str, params: Optional[Dict] = None) -> Dict:
-        """Search tasks."""
+        """Search tasks using the list endpoint with query parameter (as UI does)."""
         search_params = params or {}
         search_params['q'] = query
-        return self.get(f"{self.api_base}/tasks/search", params=search_params)
+        # Use the task list endpoint with query parameter (same as UI)
+        return self.list_tasks(params=search_params)
     
     # ========================================
     # Workspace Operations
@@ -331,8 +332,8 @@ class ReqRouterClient(APIClient):
         return self.delete(f'/api/tasks/{task_id}')
     
     def search_tasks(self, query: str) -> Dict:
-        """Search tasks (proxied to TaskService)."""
-        return self.get('/api/tasks/search', params={'q': query})
+        """Search tasks using list endpoint with query parameter (proxied to TaskService)."""
+        return self.get('/api/tasks/', params={'q': query})
     
     # ========================================
     # Health Check

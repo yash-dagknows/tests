@@ -1,5 +1,8 @@
 """
 Unit tests for Task Search functionality in TaskService.
+
+Tests task search using the list endpoint with query parameter (GET /api/v1/tasks/?q=...).
+This matches how the UI performs searches.
 """
 
 import pytest
@@ -9,7 +12,7 @@ from utils.fixtures import TestDataFactory
 @pytest.mark.unit
 @pytest.mark.task
 class TestTaskSearch:
-    """Test suite for task search operations."""
+    """Test suite for task search operations (using list endpoint with query parameter)."""
     
     def test_search_tasks_by_title(self, taskservice_client, test_data_factory):
         """Test searching tasks by title."""
@@ -82,6 +85,37 @@ class TestTaskSearch:
             "nonexistent-unique-search-term-12345" not in str(t) 
             for t in tasks
         )
+    
+    def test_search_with_knn_parameters(self, taskservice_client, test_data_factory):
+        """Test UI search with KNN vector similarity parameters."""
+        unique_title = f"KNN Search Task {pytest.timestamp}"
+        task_data = test_data_factory.create_task_data(
+            title=unique_title,
+            description="This tests the KNN vector similarity search"
+        )
+        
+        try:
+            response = taskservice_client.create_task(task_data)
+            task_id = response["task"]["id"]
+            
+            # Search with KNN parameters (as UI does)
+            search_params = {
+                'knn.k': 3,
+                'knn.nc': 10,
+                'order_by': 'elastic'
+            }
+            search_results = taskservice_client.search_tasks(
+                unique_title, 
+                params=search_params
+            )
+            
+            tasks = search_results.get("tasks", search_results.get("hits", []))
+            # Should find the task using vector similarity
+            found = any(t.get("id") == task_id for t in tasks)
+            assert found, "Task not found with KNN search parameters"
+            
+        finally:
+            taskservice_client.delete_task(task_id)
 
 
 @pytest.mark.unit

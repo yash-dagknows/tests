@@ -354,23 +354,25 @@ docker-compose -f docker-compose-local.yml run --rm test-runner \
 
 ### Task Search Tests (unit/taskservice/test_task_search.py)
 
+**Note**: These tests use the UI search functionality (GET /api/v1/tasks/?q=...) which includes KNN vector similarity search.
+
 #### Run All Search Tests
 
 ```bash
-# All search tests
+# All search tests (5 tests)
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py -v
 
-# Only TestTaskSearch class
+# Only TestTaskSearch class (5 tests)
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py::TestTaskSearch -v
 
-# Only TestTaskList class
+# Only TestTaskList class (3 tests)
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py::TestTaskList -v
 ```
 
-#### TestTaskSearch - Search Operations
+#### TestTaskSearch - UI Search Operations (5 tests)
 
 ```bash
 # Test 42: Search tasks by title
@@ -388,20 +390,24 @@ docker-compose -f docker-compose-local.yml run --rm test-runner \
 # Test 45: Search nonexistent task
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py::TestTaskSearch::test_search_nonexistent_task -v
+
+# Test 46: Search with KNN vector similarity parameters
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+    pytest unit/taskservice/test_task_search.py::TestTaskSearch::test_search_with_knn_parameters -v
 ```
 
-#### TestTaskList - List Operations
+#### TestTaskList - List Operations (3 tests)
 
 ```bash
-# Test 46: List tasks
+# Test 47: List tasks
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py::TestTaskList::test_list_tasks -v
 
-# Test 47: List tasks with pagination
+# Test 48: List tasks with pagination
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py::TestTaskList::test_list_tasks_with_pagination -v
 
-# Test 48: List tasks with filters
+# Test 49: List tasks with filters
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_task_search.py::TestTaskList::test_list_tasks_with_filters -v
 ```
@@ -424,38 +430,38 @@ docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceTaskAssociation -v
 ```
 
-#### TestWorkspaceCRUD - Workspace Operations
+#### TestWorkspaceCRUD - Workspace Operations (5 tests)
 
 ```bash
-# Test 49: Create workspace
+# Test 50: Create workspace
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceCRUD::test_create_workspace -v
 
-# Test 50: Get workspace
+# Test 51: Get workspace
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceCRUD::test_get_workspace -v
 
-# Test 51: Update workspace
+# Test 52: Update workspace
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceCRUD::test_update_workspace -v
 
-# Test 52: Delete workspace
+# Test 53: Delete workspace
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceCRUD::test_delete_workspace -v
 
-# Test 53: List workspaces
+# Test 54: List workspaces
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceCRUD::test_list_workspaces -v
 ```
 
-#### TestWorkspaceTaskAssociation - Workspace-Task Relations
+#### TestWorkspaceTaskAssociation - Workspace-Task Relations (2 tests)
 
 ```bash
-# Test 54: Create task in workspace
+# Test 55: Create task in workspace
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceTaskAssociation::test_create_task_in_workspace -v
 
-# Test 55: List tasks in workspace
+# Test 56: List tasks in workspace
 docker-compose -f docker-compose-local.yml run --rm test-runner \
     pytest unit/taskservice/test_workspace.py::TestWorkspaceTaskAssociation::test_list_tasks_in_workspace -v
 ```
