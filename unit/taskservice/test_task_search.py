@@ -151,10 +151,8 @@ class TestTaskList:
     
     def test_list_tasks_with_filters(self, taskservice_client, test_data_factory):
         """Test listing tasks with filters."""
-        import logging
         unique_tag = f"filter-test-{pytest.timestamp}"
         task_data = test_data_factory.create_task_data(tags=[unique_tag])
-        task_id = None
         
         try:
             response = taskservice_client.create_task(task_data)
@@ -170,12 +168,7 @@ class TestTaskList:
             assert found, "Task not found with tag filter"
             
         finally:
-            # Attempt cleanup but don't fail test if it errors (known backend DELETE issue)
-            if task_id:
-                try:
-                    taskservice_client.delete_task(task_id)
-                except Exception as e:
-                    logging.warning(f"Failed to cleanup task {task_id}: {e}")
+            taskservice_client.delete_task(task_id)
 
 
 # Add timestamp to pytest for unique identifiers in tests
