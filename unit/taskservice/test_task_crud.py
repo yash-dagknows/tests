@@ -3,8 +3,10 @@ Unit tests for Task CRUD operations in TaskService.
 
 This test suite covers:
 1. Python script tasks (script_type: "python")
-2. Shell script tasks (script_type: "shell" or "bash")
+2. PowerShell script tasks (script_type: "powershell")
 3. Command-type tasks (script_type: "command" with commands array)
+
+Note: These script types match the application's supported types.
 """
 
 import pytest
@@ -12,7 +14,7 @@ from utils.fixtures import (
     TestDataFactory, 
     create_basic_task, 
     create_python_task, 
-    create_bash_task,
+    create_powershell_task,
     create_command_task
 )
 from utils.assertions import assert_task_equals, assert_has_required_fields, assert_response_success
@@ -158,43 +160,44 @@ class TestPythonTaskCRUD:
 
 @pytest.mark.unit
 @pytest.mark.task
-class TestShellTaskCRUD:
-    """Test suite for Shell/Bash script task CRUD operations."""
+class TestPowerShellTaskCRUD:
+    """Test suite for PowerShell script task CRUD operations."""
     
-    def test_create_shell_task(self, taskservice_client, test_data_factory):
-        """Test creating a shell script task."""
-        task_data = test_data_factory.create_shell_task_data()
+    def test_create_powershell_task(self, taskservice_client, test_data_factory):
+        """Test creating a PowerShell script task."""
+        task_data = test_data_factory.create_powershell_task_data()
         
         response = taskservice_client.create_task(task_data)
         created_task = response["task"]
         
-        assert created_task["script_type"] == "shell"
+        assert created_task["script_type"] == "powershell"
         assert "script" in created_task
         
         # Cleanup
         taskservice_client.delete_task(created_task["id"])
     
-    def test_create_bash_task(self, taskservice_client, test_data_factory):
-        """Test creating a bash script task."""
-        task_data = test_data_factory.create_bash_task_data()
-        
-        response = taskservice_client.create_task(task_data)
-        created_task = response["task"]
-        
-        assert created_task["script_type"] == "bash"
-        assert "script" in created_task
-        
-        # Cleanup
-        taskservice_client.delete_task(created_task["id"])
-    
-    def test_update_shell_task_script(self, taskservice_client, test_data_factory):
-        """Test updating a shell task's script."""
-        task_data = test_data_factory.create_shell_task_data()
+    def test_get_powershell_task(self, taskservice_client, test_data_factory):
+        """Test retrieving a PowerShell task by ID."""
+        task_data = test_data_factory.create_powershell_task_data()
         response = taskservice_client.create_task(task_data)
         task_id = response["task"]["id"]
         
         try:
-            new_script = "#!/bin/sh\necho 'Updated shell script'\nls -la"
+            fetched = taskservice_client.get_task(task_id)
+            
+            assert fetched["task"]["id"] == task_id
+            assert fetched["task"]["script_type"] == "powershell"
+        finally:
+            taskservice_client.delete_task(task_id)
+    
+    def test_update_powershell_task_script(self, taskservice_client, test_data_factory):
+        """Test updating a PowerShell task's script."""
+        task_data = test_data_factory.create_powershell_task_data()
+        response = taskservice_client.create_task(task_data)
+        task_id = response["task"]["id"]
+        
+        try:
+            new_script = "Write-Host 'Updated PowerShell script'\nGet-Date"
             updates = {"script": new_script}
             
             taskservice_client.update_task(task_id, updates, ["script"])

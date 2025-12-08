@@ -117,38 +117,20 @@ class TestDataFactory:
         }
     
     @staticmethod
-    def create_shell_task_data(
+    def create_powershell_task_data(
         title: str = None,
         description: str = None,
         script: str = None,
         tags: List[str] = None,
         **kwargs
     ) -> Dict[str, Any]:
-        """Generate shell script task data for testing."""
+        """Generate PowerShell task data for testing."""
         return {
-            "title": title or f"Shell Task {int(datetime.now().timestamp())}",
+            "title": title or f"PowerShell Task {int(datetime.now().timestamp())}",
             "description": description or fake.sentence(),
-            "script": script or "echo 'Hello from Shell'",
-            "script_type": "shell",
-            "tags": tags or ["test", "shell"],
-            **kwargs
-        }
-    
-    @staticmethod
-    def create_bash_task_data(
-        title: str = None,
-        description: str = None,
-        script: str = None,
-        tags: List[str] = None,
-        **kwargs
-    ) -> Dict[str, Any]:
-        """Generate bash script task data for testing."""
-        return {
-            "title": title or f"Bash Task {int(datetime.now().timestamp())}",
-            "description": description or fake.sentence(),
-            "script": script or "#!/bin/bash\necho 'Hello from Bash'",
-            "script_type": "bash",
-            "tags": tags or ["test", "bash"],
+            "script": script or "Write-Host 'Hello from PowerShell'",
+            "script_type": "powershell",
+            "tags": tags or ["test", "powershell"],
             **kwargs
         }
     
@@ -352,14 +334,14 @@ def create_python_task(title: str = "Python Test Task") -> Dict[str, Any]:
     }
 
 
-def create_bash_task(title: str = "Bash Test Task") -> Dict[str, Any]:
-    """Create a Bash task."""
+def create_powershell_task(title: str = "PowerShell Test Task") -> Dict[str, Any]:
+    """Create a PowerShell task."""
     return {
         "title": title,
-        "description": "A Bash test task",
-        "script": "#!/bin/bash\necho 'Hello from Bash'",
-        "script_type": "bash",
-        "tags": ["bash", "test"],
+        "description": "A PowerShell test task",
+        "script": "Write-Host 'Hello from PowerShell'",
+        "script_type": "powershell",
+        "tags": ["powershell", "test"],
     }
 
 
