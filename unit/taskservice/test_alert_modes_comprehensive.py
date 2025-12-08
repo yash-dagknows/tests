@@ -28,7 +28,7 @@ class TestDeterministicMode:
     field to execute when specific alerts are received.
     """
     
-    @pytest.fixture(scope="class", autouse=True)
+    @pytest.fixture(autouse=True)
     def setup_mode(self, req_router_client):
         """Configure incident_response_mode to 'deterministic' for this test class."""
         try:
@@ -195,7 +195,7 @@ class TestAISelectedMode:
     the best task to execute.
     """
     
-    @pytest.fixture(scope="class", autouse=True)
+    @pytest.fixture(autouse=True)
     def setup_mode(self, req_router_client):
         """Configure incident_response_mode to 'ai_selected' for this test class."""
         try:
@@ -361,7 +361,7 @@ class TestAutonomousMode:
     investigate and resolve the issue.
     """
     
-    @pytest.fixture(scope="class", autouse=True)
+    @pytest.fixture(autouse=True)
     def setup_mode(self, req_router_client):
         """Configure incident_response_mode to 'autonomous' for this test class."""
         try:
