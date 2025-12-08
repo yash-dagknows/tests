@@ -98,6 +98,50 @@ class TestDataFactory:
             **kwargs
         }
     
+    # ========================================
+    # Alert Data
+    # ========================================
+    
+    @staticmethod
+    def create_grafana_alert_data(
+        alert_name: str = "TestAlert",
+        alert_source: str = "grafana",
+        status: str = "firing",
+        severity: str = "warning",
+        description: str = None,
+        summary: str = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Generate Grafana-style alert payload for testing."""
+        return create_grafana_alert_data(
+            alert_name=alert_name,
+            alert_source=alert_source,
+            status=status,
+            severity=severity,
+            description=description or fake.sentence(),
+            summary=summary or fake.sentence(nb_words=6),
+            **kwargs
+        )
+    
+    @staticmethod
+    def create_pagerduty_alert_data(
+        alert_name: str = "TestIncident",
+        alert_source: str = "pagerduty",
+        event_type: str = "incident.triggered",
+        urgency: str = "high",
+        description: str = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Generate PagerDuty-style alert payload for testing."""
+        return create_pagerduty_alert_data(
+            alert_name=alert_name,
+            alert_source=alert_source,
+            event_type=event_type,
+            urgency=urgency,
+            description=description or fake.sentence(),
+            **kwargs
+        )
+    
     @staticmethod
     def create_python_task_data(
         title: str = None,
@@ -353,5 +397,135 @@ def create_command_task(title: str = "Command Test Task") -> Dict[str, Any]:
         "script_type": "command",
         "commands": ["echo 'test'", "pwd"],
         "tags": ["command", "test"],
+    }
+
+
+def create_grafana_alert_data(
+    alert_name: str = "TestAlert",
+    alert_source: str = "grafana",
+    status: str = "firing",
+    severity: str = "warning",
+    description: str = "Test alert description",
+    summary: str = "Test alert summary",
+    instance: str = "test-instance",
+    job: str = "test-job"
+) -> Dict[str, Any]:
+    """Create a Grafana-style alert payload for testing.
+    
+    Args:
+        alert_name: Name of the alert
+        alert_source: Source system (e.g., "grafana", "pagerduty")
+        status: Alert status ("firing" or "resolved")
+        severity: Alert severity (e.g., "critical", "warning", "info")
+        description: Alert description
+        summary: Alert summary
+        instance: Instance identifier
+        job: Job identifier
+    
+    Returns:
+        Dict containing Grafana alert webhook payload
+    """
+    import time
+    timestamp = time.time()
+    
+    return {
+        "receiver": "Test_Alert_Endpoint",
+        "status": status,
+        "alerts": [
+            {
+                "status": status,
+                "labels": {
+                    "alertname": alert_name,
+                    "grafana_folder": "test_folder",
+                    "instance": instance,
+                    "job": job,
+                    "severity": severity
+                },
+                "annotations": {
+                    "description": description,
+                    "summary": summary
+                },
+                "startsAt": f"{int(timestamp)}",
+                "endsAt": "0" if status == "firing" else f"{int(timestamp + 300)}",
+                "generatorURL": f"http://localhost:3000/grafana/alerting/{alert_name}",
+                "fingerprint": f"test{int(timestamp)}",
+                "values": {
+                    "A": 1
+                },
+                "valueString": f"[var='A' labels={{__name__={alert_name}}} value=1]"
+            }
+        ],
+        "groupLabels": {
+            "alertname": alert_name,
+            "grafana_folder": "test_folder"
+        },
+        "commonLabels": {
+            "alertname": alert_name,
+            "grafana_folder": "test_folder",
+            "instance": instance,
+            "job": job,
+            "severity": severity
+        },
+        "commonAnnotations": {
+            "description": description,
+            "summary": summary
+        },
+        "externalURL": "http://localhost:3000/grafana/",
+        "version": "1",
+        "title": f"[{status.upper()}:1] {alert_name}",
+        "state": "alerting" if status == "firing" else "resolved",
+        "message": f"**{status}**\n\nAlert: {alert_name}\nDescription: {description}"
+    }
+
+
+def create_pagerduty_alert_data(
+    alert_name: str = "TestIncident",
+    alert_source: str = "pagerduty",
+    event_type: str = "incident.triggered",
+    urgency: str = "high",
+    description: str = "Test incident description"
+) -> Dict[str, Any]:
+    """Create a PagerDuty-style alert payload for testing.
+    
+    Args:
+        alert_name: Name/title of the incident
+        alert_source: Source system (usually "pagerduty")
+        event_type: PagerDuty event type (e.g., "incident.triggered", "incident.resolved")
+        urgency: Incident urgency ("high" or "low")
+        description: Incident description
+    
+    Returns:
+        Dict containing PagerDuty webhook payload
+    """
+    import time
+    timestamp = time.time()
+    
+    return {
+        "event": {
+            "id": f"event-test-{int(timestamp)}",
+            "event_type": event_type,
+            "occurred_at": f"{int(timestamp)}",
+            "data": {
+                "id": f"incident-test-{int(timestamp)}",
+                "incident_key": alert_name,
+                "type": "incident",
+                "summary": alert_name,
+                "description": description,
+                "urgency": urgency,
+                "status": "triggered" if event_type == "incident.triggered" else "resolved",
+                "service": {
+                    "id": "service-test",
+                    "name": "Test Service",
+                    "summary": "Test Service"
+                },
+                "priority": {
+                    "id": "priority-test",
+                    "name": "P1" if urgency == "high" else "P3",
+                    "summary": "High Priority" if urgency == "high" else "Low Priority"
+                },
+                "created_at": f"{int(timestamp)}",
+                "html_url": f"https://test.pagerduty.com/incidents/test-{int(timestamp)}"
+            }
+        }
     }
 

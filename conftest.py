@@ -39,33 +39,83 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture(scope="session")
 def test_config():
-    """Load test configuration from environment."""
-    config = {
-        "req_router_url": os.getenv("DAGKNOWS_REQ_ROUTER_URL", "http://localhost:8888"),
-        "taskservice_url": os.getenv("DAGKNOWS_TASKSERVICE_URL", "http://localhost:2235"),
-        "settings_url": os.getenv("DAGKNOWS_SETTINGS_URL", "http://localhost:2225"),
-        "elastic_url": os.getenv("DAGKNOWS_ELASTIC_URL", "http://localhost:9200"),
-        "postgres_host": os.getenv("POSTGRESQL_DB_HOST", "localhost"),
+    """Load test configuration from environment.
+    
+    Supports two modes:
+    1. Local Docker testing (default) - Uses Docker service names
+    2. Remote deployment testing - Uses DAGKNOWS_URL + DAGKNOWS_TOKEN
+    
+    Environment variables:
+        DAGKNOWS_URL: Base URL for remote deployment (e.g., https://44.224.1.45)
+        DAGKNOWS_TOKEN: Bearer token for authentication
+        DAGKNOWS_REQ_ROUTER_URL: Override req-router URL (for local Docker)
+        DAGKNOWS_TASKSERVICE_URL: Override taskservice URL (for local Docker)
+    """
+    # Check if testing against remote deployment
+    base_url = os.getenv("DAGKNOWS_URL")
+    bearer_token = os.getenv("DAGKNOWS_TOKEN")
+    
+    if base_url:
+        # Remote deployment mode
+        logger.info(f"🌐 Remote deployment mode: {base_url}")
+        config = {
+            "req_router_url": base_url,  # req-router is at root
+            "taskservice_url": f"{base_url}/api/v1",  # taskservice at /api/v1
+            "settings_url": f"{base_url}/api/v1",
+            "bearer_token": bearer_token,
+            "use_bearer_auth": True,
+            "test_mode": "remote",
+        }
+    else:
+        # Local Docker mode (default)
+        logger.info("🐳 Local Docker mode")
+        config = {
+            "req_router_url": os.getenv("DAGKNOWS_REQ_ROUTER_URL", "http://req-router:8888"),
+            "taskservice_url": os.getenv("DAGKNOWS_TASKSERVICE_URL", "http://taskservice:2235"),
+            "settings_url": os.getenv("DAGKNOWS_SETTINGS_URL", "http://localhost:2225"),
+            "bearer_token": None,
+            "use_bearer_auth": False,
+            "test_mode": "local",
+        }
+    
+    # Common config (applies to both modes)
+    config.update({
+        "elastic_url": os.getenv("DAGKNOWS_ELASTIC_URL", "http://elasticsearch:9200"),
+        "postgres_host": os.getenv("POSTGRESQL_DB_HOST", "postgres"),
         "postgres_port": int(os.getenv("POSTGRESQL_DB_PORT", "5432")),
         "postgres_db": os.getenv("POSTGRESQL_DB_NAME", "dagknows_test"),
         "postgres_user": os.getenv("POSTGRESQL_DB_USER", "postgres"),
         "postgres_password": os.getenv("POSTGRESQL_DB_PASSWORD", "testpassword123"),
-        "test_org": os.getenv("DEFAULT_ORG", "test-org"),
-        "test_user_email": os.getenv("TEST_USER_EMAIL", "test@dagknows.com"),
+        "test_org": os.getenv("DEFAULT_ORG", "avengers"),  # Default org from token
+        "test_user_email": os.getenv("TEST_USER_EMAIL", "ironman@avengers.com"),
         "test_user_password": os.getenv("TEST_USER_PASSWORD", "testpass123"),
-        "test_admin_email": os.getenv("TEST_ADMIN_EMAIL", "admin@dagknows.com"),
+        "test_admin_email": os.getenv("TEST_ADMIN_EMAIL", "ironman@avengers.com"),
         "test_admin_password": os.getenv("TEST_ADMIN_PASSWORD", "adminpass123"),
         "auto_cleanup": os.getenv("AUTO_CLEANUP_TEST_DATA", "true").lower() == "true",
-    }
-    logger.info(f"Test configuration loaded: {config['req_router_url']}")
+    })
+    
+    logger.info(f"Test configuration loaded: {config['req_router_url']} (mode: {config['test_mode']})")
+    if config.get("use_bearer_auth"):
+        logger.info(f"✓ Bearer token authentication enabled")
+    
     return config
 
 @pytest.fixture(scope="session")
 def wait_for_services(test_config):
-    """Wait for all services to be ready before running tests."""
+    """Wait for all services to be ready before running tests.
+    
+    In remote deployment mode, skip service checks as we can't access
+    internal services directly. Assume deployment is healthy.
+    """
     import requests
     from time import sleep
     
+    # Skip service checks for remote deployment
+    if test_config.get("test_mode") == "remote":
+        logger.info("Remote deployment mode - skipping internal service checks")
+        return True
+    
+    # Local Docker mode - check all services
     services = {
         "Elasticsearch": f"{test_config['elastic_url']}/_cluster/health",
         "TaskService": f"{test_config['taskservice_url']}/api/v1/tasks/status",
@@ -114,20 +164,25 @@ def taskservice_client(test_config, wait_for_services):
         test_mode=True
     )
     
-    # Automatically set test user info for all tests
-    actual_org = os.getenv("DEFAULT_ORG") or test_config.get("test_org", "dagknows")
-    
-    user_info = {
-        "uid": "1",
-        "uname": "test@dagknows.com",
-        "first_name": "Test",
-        "last_name": "User",
-        "org": actual_org.lower(),
-        "role": "Admin"
-    }
-    
-    client.set_user_info(user_info)
-    logger.debug(f"TaskService client configured with org: {actual_org}")
+    # Use Bearer token if configured (remote deployment mode)
+    if test_config.get("use_bearer_auth") and test_config.get("bearer_token"):
+        client.set_bearer_token(test_config["bearer_token"])
+        logger.debug("TaskService client configured with Bearer token")
+    else:
+        # Local Docker mode - use test user info
+        actual_org = os.getenv("DEFAULT_ORG") or test_config.get("test_org", "dagknows")
+        
+        user_info = {
+            "uid": "1",
+            "uname": test_config.get("test_user_email", "test@dagknows.com"),
+            "first_name": "Test",
+            "last_name": "User",
+            "org": actual_org.lower(),
+            "role": "Admin"
+        }
+        
+        client.set_user_info(user_info)
+        logger.debug(f"TaskService client configured with org: {actual_org}")
     
     return client
 
@@ -139,20 +194,25 @@ def req_router_client(test_config, wait_for_services):
         test_mode=True
     )
     
-    # Automatically set test user info for all tests
-    actual_org = os.getenv("DEFAULT_ORG") or test_config.get("test_org", "dagknows")
-    
-    user_info = {
-        "uid": "1",
-        "uname": "test@dagknows.com",
-        "first_name": "Test",
-        "last_name": "User",
-        "org": actual_org.lower(),
-        "role": "Admin"
-    }
-    
-    client.set_user_info(user_info)
-    logger.debug(f"ReqRouter client configured with org: {actual_org}")
+    # Use Bearer token if configured (remote deployment mode)
+    if test_config.get("use_bearer_auth") and test_config.get("bearer_token"):
+        client.set_bearer_token(test_config["bearer_token"])
+        logger.debug("ReqRouter client configured with Bearer token")
+    else:
+        # Local Docker mode - use test user info
+        actual_org = os.getenv("DEFAULT_ORG") or test_config.get("test_org", "dagknows")
+        
+        user_info = {
+            "uid": "1",
+            "uname": test_config.get("test_user_email", "test@dagknows.com"),
+            "first_name": "Test",
+            "last_name": "User",
+            "org": actual_org.lower(),
+            "role": "Admin"
+        }
+        
+        client.set_user_info(user_info)
+        logger.debug(f"ReqRouter client configured with org: {actual_org}")
     
     return client
 

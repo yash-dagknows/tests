@@ -41,6 +41,15 @@ class APIClient:
         self.session.headers.update({
             'Authorization': f'Bearer {token}'
         })
+        # When using real auth token, disable test mode headers
+        if 'X-Test-Mode' in self.session.headers:
+            del self.session.headers['X-Test-Mode']
+        if 'dk-user-info' in self.session.headers:
+            del self.session.headers['dk-user-info']
+    
+    def set_bearer_token(self, token: str):
+        """Set Bearer token for authentication (alias for set_auth_token)."""
+        self.set_auth_token(token)
     
     def set_user_info(self, user_info: Dict[str, Any]):
         """Set user info header for test requests."""
@@ -346,6 +355,81 @@ class ReqRouterClient(APIClient):
     def search_tasks(self, query: str) -> Dict:
         """Search tasks using list endpoint with query parameter (proxied to TaskService)."""
         return self.get('/api/tasks/', params={'q': query})
+    
+    # ========================================
+    # Alert Operations
+    # ========================================
+    
+    def process_alert(self, alert_payload: Dict, proxy: str = "dev", task_id: str = None) -> Dict:
+        """Process an alert through the alert handling pipeline.
+        
+        Args:
+            alert_payload: Alert webhook payload (Grafana, PagerDuty, etc.)
+            proxy: Proxy identifier
+            task_id: Optional task ID for deterministic routing
+        
+        Returns:
+            Dict containing alert processing result
+        """
+        params = {"proxy": proxy}
+        if task_id:
+            params["taskid"] = task_id
+        
+        return self.post('/processAlert', alert_payload, params=params)
+    
+    def search_alerts(self, params: Dict = None) -> Dict:
+        """Search alerts with filters.
+        
+        Args:
+            params: Query parameters (source, severity, status, selection_mode, q, etc.)
+        
+        Returns:
+            Dict containing search results with alerts list
+        """
+        return self.get('/api/alerts', params=params or {})
+    
+    def get_alert(self, alert_id: str) -> Dict:
+        """Get a specific alert by ID.
+        
+        Args:
+            alert_id: Alert ID
+        
+        Returns:
+            Dict containing alert data
+        """
+        return self.get(f'/api/alerts/{alert_id}')
+    
+    def delete_alert(self, alert_id: str) -> Dict:
+        """Delete an alert.
+        
+        Args:
+            alert_id: Alert ID
+        
+        Returns:
+            Dict containing deletion result
+        """
+        return self.delete(f'/api/alerts/{alert_id}')
+    
+    def get_alert_stats(self, workspace_id: str = None, start_time: float = -1, end_time: float = -1) -> Dict:
+        """Get alert statistics.
+        
+        Args:
+            workspace_id: Optional workspace ID filter
+            start_time: Optional start time filter (timestamp)
+            end_time: Optional end time filter (timestamp)
+        
+        Returns:
+            Dict containing alert statistics aggregated by status, severity, source, and selection_mode
+        """
+        params = {}
+        if workspace_id:
+            params["workspace_id"] = workspace_id
+        if start_time > 0:
+            params["start_time"] = start_time
+        if end_time > 0:
+            params["end_time"] = end_time
+        
+        return self.get('/api/alerts/stats', params=params)
     
     # ========================================
     # Health Check
