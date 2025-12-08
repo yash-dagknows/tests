@@ -67,9 +67,9 @@ class TestDeterministicMode:
         3. Verify task executes
         4. Verify response shows deterministic mode
         """
-        # Use simple source name (no underscores) to avoid capitalization issues
-        alert_source_raw = f"testsource{pytest.timestamp}"
-        alert_source = alert_source_raw.title()  # "Testsource123" - matches req-router capitalization
+        # Use real alert source name - Grafana (since we're sending Grafana-formatted alerts)
+        # Req-router detects source from alert format, not from custom fields
+        alert_source = "Grafana"
         alert_name = f"CPUHighAlert{pytest.timestamp}"
         
         task_id = None
@@ -83,10 +83,10 @@ class TestDeterministicMode:
                 script="print('Handling CPU alert')\nprint('Checking process list...')"
             )
             
-            # Configure task to trigger on specific alert
+            # Configure task to trigger on specific Grafana alert
             task_data["trigger_on_alerts"] = [
                 {
-                    "source": alert_source,  # Backend expects 'source', not 'alert_source'
+                    "source": alert_source,  # Must be "Grafana" for Grafana-formatted alerts
                     "alert_name": alert_name,
                     "dedup_interval": 300
                 }
@@ -100,9 +100,10 @@ class TestDeterministicMode:
             logger.info(f"  Configured for: alert_source={alert_source}, alert_name={alert_name}")
             
             # Send matching Grafana alert
+            # Note: alert_source in payload is ignored - req-router detects "Grafana" from format
             alert_payload = test_data_factory.create_grafana_alert_data(
                 alert_name=alert_name,
-                alert_source=alert_source_raw,  # Send lowercase, req-router will capitalize
+                alert_source="grafana",  # This is ignored; req-router detects "Grafana" from payload format
                 status="firing",
                 severity="critical",
                 description="CPU usage exceeded 90% threshold",
@@ -127,7 +128,8 @@ class TestDeterministicMode:
             tasks_executed = alert_response.get("tasks_executed", 0)
             assert tasks_executed >= 1, \
                 f"Expected task to execute, but tasks_executed={tasks_executed}. " \
-                f"Alert source sent: {alert_source_raw}, expected by task: {alert_source}"
+                f"Task configured for: source={alert_source}, name={alert_name}. " \
+                f"Alert detected as: source={alert_response.get('alert_source')}, name={alert_response.get('alert_name')}"
             
             # Verify execution details
             executed_tasks = alert_response.get("executed_tasks", [])
@@ -163,12 +165,13 @@ class TestDeterministicMode:
         2. Verify no tasks executed
         3. Verify response shows deterministic mode
         """
-        alert_source_raw = f"nomatch{pytest.timestamp}"
+        # Use a unique alert name that won't match any configured task
         alert_name = f"UnknownAlert{pytest.timestamp}"
         
+        # Send Grafana alert (source will be detected as "Grafana")
         alert_payload = test_data_factory.create_grafana_alert_data(
             alert_name=alert_name,
-            alert_source=alert_source_raw,
+            alert_source="grafana",
             status="firing",
             description="Alert with no configured handler"
         )
@@ -240,7 +243,6 @@ class TestAISelectedMode:
         3. AI should find the tooltask via similarity search
         4. AI should select and execute the task
         """
-        alert_source_raw = f"aisource{pytest.timestamp}"
         alert_name = f"CPUPerformance{pytest.timestamp}"
         
         task_id = None
@@ -265,10 +267,10 @@ class TestAISelectedMode:
             logger.info("Waiting for task vectorization...")
             time.sleep(5)
             
-            # Send alert about CPU issues (similar topic, no deterministic match)
+            # Send Grafana alert about CPU issues (similar topic, no deterministic match)
             alert_payload = test_data_factory.create_grafana_alert_data(
                 alert_name=alert_name,
-                alert_source=alert_source_raw,
+                alert_source="grafana",
                 status="firing",
                 severity="critical",
                 description="Server CPU utilization has reached 95% and is causing application slowness. Immediate investigation needed.",
@@ -328,12 +330,11 @@ class TestAISelectedMode:
         2. AI should not find any similar tooltasks (similarity < 0.7)
         3. Verify no tasks executed
         """
-        alert_source_raw = f"ainosim{pytest.timestamp}"
         alert_name = f"UniqueAlert{pytest.timestamp}"
         
         alert_payload = test_data_factory.create_grafana_alert_data(
             alert_name=alert_name,
-            alert_source=alert_source_raw,
+            alert_source="grafana",
             status="firing",
             description="Extremely specific quantum entanglement flux capacitor malfunction in subsystem omega-9000 with cascade resonance pattern alpha-delta-gamma",
             summary="Quantum System Malfunction"
@@ -410,12 +411,11 @@ class TestAutonomousMode:
         3. Verify session starts successfully
         4. Verify runbook and child tasks created
         """
-        alert_source_raw = f"autosource{pytest.timestamp}"
         alert_name = f"DatabaseSlowQuery{pytest.timestamp}"
         
         alert_payload = test_data_factory.create_grafana_alert_data(
             alert_name=alert_name,
-            alert_source=alert_source_raw,
+            alert_source="grafana",
             status="firing",
             severity="warning",
             description="Database query response time has degraded by 400% over the last 15 minutes. Multiple slow queries detected. Users experiencing page load timeouts.",
@@ -517,7 +517,6 @@ class TestModeSwitching:
         3. Send same alert → AI may find task
         4. Switch back to deterministic
         """
-        alert_source_raw = f"modesw{pytest.timestamp}"
         alert_name = f"TestModeSwitching{pytest.timestamp}"
         
         original_mode = None
@@ -537,7 +536,7 @@ class TestModeSwitching:
             
             alert_payload = test_data_factory.create_grafana_alert_data(
                 alert_name=alert_name,
-                alert_source=alert_source_raw,
+                alert_source="grafana",
                 status="firing",
                 description="Application performance issue detected"
             )
@@ -557,7 +556,7 @@ class TestModeSwitching:
             # Send different alert name to avoid dedup
             alert_payload2 = test_data_factory.create_grafana_alert_data(
                 alert_name=f"{alert_name}_v2",
-                alert_source=alert_source_raw,
+                alert_source="grafana",
                 status="firing",
                 description="Application performance issue detected"
             )
