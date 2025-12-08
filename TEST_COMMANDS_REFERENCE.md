@@ -900,6 +900,67 @@ docker-compose -f docker-compose-local.yml run --rm test-runner \
 
 ---
 
+## Alert Handling Mode Tests
+
+### Comprehensive Alert Mode Testing (Recommended)
+
+**Test File**: `unit/taskservice/test_alert_modes_comprehensive.py`
+
+This test suite properly configures and tests all three incident response modes:
+- Deterministic Mode
+- AI-Selected Mode (requires AI)
+- Autonomous Mode (requires AI)
+
+#### Run All Alert Mode Tests
+```bash
+# Local Docker
+docker-compose -f docker-compose-local.yml run --rm test-runner \
+  pytest unit/taskservice/test_alert_modes_comprehensive.py -v
+
+# Remote
+./run_remote_tests.sh unit/taskservice/test_alert_modes_comprehensive.py -v
+```
+
+#### Run Specific Mode Tests
+
+**Deterministic Mode Only** (no AI required):
+```bash
+pytest unit/taskservice/test_alert_modes_comprehensive.py::TestDeterministicMode -v
+```
+
+**AI-Selected Mode**:
+```bash
+pytest unit/taskservice/test_alert_modes_comprehensive.py::TestAISelectedMode -v -m ai_required
+```
+
+**Autonomous Mode**:
+```bash
+pytest unit/taskservice/test_alert_modes_comprehensive.py::TestAutonomousMode -v -m "ai_required and slow"
+```
+
+**Configuration Tests**:
+```bash
+pytest unit/taskservice/test_alert_modes_comprehensive.py::TestModeConfiguration -v
+pytest unit/taskservice/test_alert_modes_comprehensive.py::TestModeSwitching -v
+```
+
+#### Skip AI Tests
+```bash
+pytest unit/taskservice/test_alert_modes_comprehensive.py -v -m "not ai_required"
+```
+
+#### Run with Detailed Logging
+```bash
+pytest unit/taskservice/test_alert_modes_comprehensive.py -v -s --log-cli-level=INFO
+```
+
+### See Also
+- **`ALERT_MODES_TESTING_GUIDE.md`** - Complete guide with setup, troubleshooting, and scenarios
+- **`MANUAL_ALERT_TESTING.md`** - Manual testing with curl
+- **`QUICK_ALERT_TEST.sh`** - Quick automated test script
+
+---
+
 ## Tips & Tricks
 
 ### 1. Always Load Environment First

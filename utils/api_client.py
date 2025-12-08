@@ -432,6 +432,32 @@ class ReqRouterClient(APIClient):
         return self.get('/api/alerts/stats', params=params)
     
     # ========================================
+    # Settings Operations
+    # ========================================
+    
+    def set_incident_response_mode(self, mode: str) -> Dict:
+        """Set the incident response mode for alert handling.
+        
+        Args:
+            mode: One of 'deterministic', 'ai_selected', or 'autonomous'
+        
+        Returns:
+            Dict containing updated admin settings
+        """
+        if mode not in ['deterministic', 'ai_selected', 'autonomous']:
+            raise ValueError(f"Invalid mode: {mode}. Must be one of: deterministic, ai_selected, autonomous")
+        
+        return self.post('/setFlags', {'incident_response_mode': mode})
+    
+    def get_admin_settings(self) -> Dict:
+        """Get admin settings including incident_response_mode.
+        
+        Returns:
+            Dict containing admin settings
+        """
+        return self.post('/getAdminSettingsFlags', {})
+    
+    # ========================================
     # Health Check
     # ========================================
     
