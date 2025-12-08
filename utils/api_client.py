@@ -154,9 +154,15 @@ class TaskServiceClient(APIClient):
             payload = {"task": task_updates}
         return self.patch(f"{self.api_base}/tasks/{task_id}", payload)
     
-    def delete_task(self, task_id: str) -> Dict:
-        """Delete a task."""
-        return self.delete(f"{self.api_base}/tasks/{task_id}")
+    def delete_task(self, task_id: str, wsid: str = "") -> Dict:
+        """Delete a task.
+        
+        Args:
+            task_id: ID of the task to delete
+            wsid: Workspace ID (empty string for default workspace)
+        """
+        params = {"wsid": wsid} if wsid is not None else {"wsid": ""}
+        return self.delete(f"{self.api_base}/tasks/{task_id}", params=params)
     
     def list_tasks(self, params: Optional[Dict] = None) -> Dict:
         """List tasks with optional filters."""
@@ -327,9 +333,15 @@ class ReqRouterClient(APIClient):
         """Update task (proxied to TaskService)."""
         return self.patch(f'/api/tasks/{task_id}', updates)
     
-    def delete_task(self, task_id: str) -> Dict:
-        """Delete task (proxied to TaskService)."""
-        return self.delete(f'/api/tasks/{task_id}')
+    def delete_task(self, task_id: str, wsid: str = "") -> Dict:
+        """Delete task (proxied to TaskService).
+        
+        Args:
+            task_id: ID of the task to delete
+            wsid: Workspace ID (empty string for default workspace)
+        """
+        params = {"wsid": wsid} if wsid is not None else {"wsid": ""}
+        return self.delete(f'/api/tasks/{task_id}', params=params)
     
     def search_tasks(self, query: str) -> Dict:
         """Search tasks using list endpoint with query parameter (proxied to TaskService)."""
