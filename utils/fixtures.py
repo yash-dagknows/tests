@@ -84,17 +84,71 @@ class TestDataFactory:
         title: str = None,
         description: str = None,
         script: str = None,
-        script_type: str = "shell",
+        script_type: str = "python",
         tags: List[str] = None,
         **kwargs
     ) -> Dict[str, Any]:
-        """Generate task data for testing."""
+        """Generate task data for testing (Python script by default)."""
         return {
             "title": title or f"Test Task {int(datetime.now().timestamp())}",
             "description": description or fake.sentence(),
-            "script": script or "echo 'Hello World'",
+            "script": script or "print('Hello World')",
             "script_type": script_type,
             "tags": tags or ["test"],
+            **kwargs
+        }
+    
+    @staticmethod
+    def create_python_task_data(
+        title: str = None,
+        description: str = None,
+        script: str = None,
+        tags: List[str] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Generate Python task data for testing."""
+        return {
+            "title": title or f"Python Task {int(datetime.now().timestamp())}",
+            "description": description or fake.sentence(),
+            "script": script or "print('Hello from Python')",
+            "script_type": "python",
+            "tags": tags or ["test", "python"],
+            **kwargs
+        }
+    
+    @staticmethod
+    def create_shell_task_data(
+        title: str = None,
+        description: str = None,
+        script: str = None,
+        tags: List[str] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Generate shell script task data for testing."""
+        return {
+            "title": title or f"Shell Task {int(datetime.now().timestamp())}",
+            "description": description or fake.sentence(),
+            "script": script or "echo 'Hello from Shell'",
+            "script_type": "shell",
+            "tags": tags or ["test", "shell"],
+            **kwargs
+        }
+    
+    @staticmethod
+    def create_bash_task_data(
+        title: str = None,
+        description: str = None,
+        script: str = None,
+        tags: List[str] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Generate bash script task data for testing."""
+        return {
+            "title": title or f"Bash Task {int(datetime.now().timestamp())}",
+            "description": description or fake.sentence(),
+            "script": script or "#!/bin/bash\necho 'Hello from Bash'",
+            "script_type": "bash",
+            "tags": tags or ["test", "bash"],
             **kwargs
         }
     
@@ -277,12 +331,13 @@ class TestDataFactory:
 
 # Convenience functions
 def create_basic_task(title: str = "Basic Test Task") -> Dict[str, Any]:
-    """Create a basic task with minimal fields."""
+    """Create a basic Python task with minimal fields."""
     return {
         "title": title,
         "description": "A basic test task",
-        "script": "echo 'test'",
-        "script_type": "shell",
+        "script": "print('test')",
+        "script_type": "python",
+        "tags": ["test"],
     }
 
 
@@ -302,8 +357,19 @@ def create_bash_task(title: str = "Bash Test Task") -> Dict[str, Any]:
     return {
         "title": title,
         "description": "A Bash test task",
-        "script": "#!/bin/bash\\necho 'Hello from Bash'",
+        "script": "#!/bin/bash\necho 'Hello from Bash'",
         "script_type": "bash",
         "tags": ["bash", "test"],
+    }
+
+
+def create_command_task(title: str = "Command Test Task") -> Dict[str, Any]:
+    """Create a command-type task."""
+    return {
+        "title": title,
+        "description": "A command-type test task",
+        "script_type": "command",
+        "commands": ["echo 'test'", "pwd"],
+        "tags": ["command", "test"],
     }
 

@@ -269,12 +269,12 @@ def test_tenant(test_config, req_router_client, test_admin):
 
 @pytest.fixture(scope="function")
 def test_task(authenticated_user, taskservice_client):
-    """Creates a test task and cleans up afterwards."""
+    """Creates a test Python task and cleans up afterwards."""
     task_data = {
         "title": f"Test Task {int(time.time())}",
         "description": "Test task description",
-        "script": "echo 'Hello World'",
-        "script_type": "shell",
+        "script": "print('Hello World')",
+        "script_type": "python",
         "tags": ["test"],
     }
     
@@ -295,7 +295,7 @@ def test_task(authenticated_user, taskservice_client):
 
 @pytest.fixture(scope="function")
 def test_tasks(authenticated_user, taskservice_client):
-    """Creates multiple test tasks and cleans up afterwards."""
+    """Creates multiple test Python tasks and cleans up afterwards."""
     tasks = []
     task_ids = []
     
@@ -304,8 +304,8 @@ def test_tasks(authenticated_user, taskservice_client):
             task_data = {
                 "title": f"Test Task {i} - {int(time.time())}",
                 "description": f"Test task {i} description",
-                "script": f"echo 'Task {i}'",
-                "script_type": "shell",
+                "script": f"print('Task {i}')",
+                "script_type": "python",
                 "tags": ["test", f"task-{i}"],
             }
             response = taskservice_client.create_task(task_data)
