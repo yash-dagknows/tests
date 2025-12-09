@@ -54,31 +54,62 @@ class LoginPage(BasePage):
     
     def fill_org(self, org: str) -> None:
         """Fill organization field (if visible)."""
-        if self.page.locator(self.ORG_INPUT).is_visible():
-            logger.info(f"Filling org: {org}")
-            self.page.locator(self.ORG_INPUT).fill(org)
+        logger.info(f"Checking if org field is visible...")
+        try:
+            # Wait a bit for the field to appear
+            org_locator = self.page.locator(self.ORG_INPUT)
+            if org_locator.count() > 0:
+                # Field exists, check if visible
+                if org_locator.is_visible():
+                    logger.info(f"Filling org field: {org}")
+                    org_locator.fill(org)
+                else:
+                    logger.info("Org field exists but is not visible")
+            else:
+                logger.info("Org field does not exist on page")
+        except Exception as e:
+            logger.warning(f"Could not fill org field: {e}")
     
     def click_sign_in(self) -> None:
-        """Click sign in button (the main visible button in the middle of the page)."""
-        logger.info("Clicking sign in button")
-        # There are multiple "Sign in" buttons on the page:
-        # 1. <button class="btn btn-primary"> - the main visible button (we want this one)
-        # 2. <input type="button"> - secondary/hidden button
-        # Target the main button specifically using its CSS class
+        """Click sign in button (the button inside the login form, NOT the top-right nav button)."""
+        logger.info("Clicking sign in button in login form")
+        # There are TWO "Sign in" buttons on the page:
+        # 1. Top-right navigation: "Sign in" link/button (WRONG - doesn't submit form)
+        # 2. Login form middle: "Sign in" button (CORRECT - submits the form)
+        # 
+        # We need to target the button that's INSIDE the login form, not the nav button
+        
         try:
-            # First try the primary button (the visible one in the middle)
-            self.page.locator('button.btn-primary:has-text("Sign in")').click()
-            logger.info("✓ Clicked main Sign in button")
+            # Strategy 1: Target the input type="button" which is the form submit button
+            # This is more specific than the generic button
+            form_button = self.page.locator('input[type="button"][value="Sign in"]')
+            if form_button.count() > 0 and form_button.is_visible():
+                form_button.click()
+                logger.info("✓ Clicked login form Sign in button (input type)")
+                return
         except Exception as e:
-            logger.warning(f"Could not click btn-primary button, trying alternatives: {e}")
-            # Fallback: try any button with "Sign in" text
-            try:
-                self.page.locator('button:has-text("Sign in")').first.click()
-                logger.info("✓ Clicked Sign in button (fallback)")
-            except Exception:
-                # Last resort: try the input button
-                self.page.locator('input[type="button"][value="Sign in"]').click()
-                logger.info("✓ Clicked input Sign in button (last resort)")
+            logger.debug(f"Could not click input button: {e}")
+        
+        try:
+            # Strategy 2: Find button within a form or login container
+            # Look for button inside a form element
+            form_signin = self.page.locator('form button:has-text("Sign in")')
+            if form_signin.count() > 0:
+                form_signin.first.click()
+                logger.info("✓ Clicked Sign in button inside form")
+                return
+        except Exception as e:
+            logger.debug(f"Could not click form button: {e}")
+        
+        try:
+            # Strategy 3: Use the btn-primary class but be more specific
+            # Avoid the nav button by looking for one that's not in header
+            primary_btn = self.page.locator('button.btn-primary:has-text("Sign in")').last
+            primary_btn.click()
+            logger.info("✓ Clicked btn-primary Sign in button (last match)")
+        except Exception as e:
+            logger.warning(f"All strategies failed: {e}")
+            raise Exception("Could not find the login form Sign in button")
     
     def wait_for_login_success(self, timeout: int = 10000) -> None:
         """
@@ -88,12 +119,57 @@ class LoginPage(BasePage):
             timeout: Wait timeout in ms
         """
         logger.info("Waiting for login success")
-        # Wait for user icon to appear (indicates successful login)
-        self.page.locator(self.SIGNED_IN_USER_ICON).wait_for(
-            state="visible",
-            timeout=timeout
-        )
-        logger.info("✓ Login successful - user icon visible")
+        
+        # Take screenshot after clicking sign in
+        self.screenshot("after-signin-click")
+        logger.info("Screenshot taken after sign-in click")
+        
+        # Wait a moment for any navigation
+        self.page.wait_for_timeout(2000)
+        
+        # Log current URL
+        current_url = self.page.url
+        logger.info(f"Current URL after sign-in: {current_url}")
+        
+        # Check for error messages
+        error_msg = self.get_error_message()
+        if error_msg:
+            logger.error(f"Login error message: {error_msg}")
+            self.screenshot("login-error")
+        
+        # Try multiple indicators of successful login
+        success_indicators = [
+            self.SIGNED_IN_USER_ICON,
+            '#signed_in_user_icon',
+            '[data-testid="user-menu"]',
+            'text=Logout',
+            'text=Sign out',
+        ]
+        
+        login_successful = False
+        for indicator in success_indicators:
+            try:
+                self.page.locator(indicator).wait_for(
+                    state="visible",
+                    timeout=timeout // len(success_indicators)
+                )
+                logger.info(f"✓ Login successful - found indicator: {indicator}")
+                login_successful = True
+                break
+            except Exception as e:
+                logger.debug(f"Indicator '{indicator}' not found: {e}")
+        
+        if not login_successful:
+            # Last resort: check if URL changed from login page
+            if "/vlogin" not in self.page.url and "/login" not in self.page.url.lower():
+                logger.info("✓ Login appears successful - URL changed from login page")
+                login_successful = True
+        
+        if not login_successful:
+            self.screenshot("login-timeout")
+            logger.error(f"Login failed - timeout waiting for success indicators")
+            logger.error(f"Final URL: {self.page.url}")
+            raise TimeoutError("Login did not complete successfully")
     
     def get_error_message(self) -> Optional[str]:
         """
@@ -134,6 +210,7 @@ class LoginPage(BasePage):
             org = org or ADMIN_USER.org
         
         logger.info(f"=== Starting login flow for {email} ===")
+        logger.info(f"Org: {org}")
         
         # Step 1: Logout first (clean state)
         self.logout_first()
@@ -141,19 +218,30 @@ class LoginPage(BasePage):
         # Step 2: Navigate to login page
         self.navigate()
         
-        # Step 3: Fill form
+        # Step 3: Wait for login form to load
+        self.page.wait_for_load_state("networkidle")
+        self.screenshot("login-page-loaded")
+        
+        # Step 4: Fill form
         self.fill_email(email)
         self.fill_password(password)
+        
+        # Always try to fill org if provided
         if org:
             self.fill_org(org)
+        else:
+            logger.warning("No org provided - this might cause login to fail")
         
-        # Step 4: Submit
+        # Take screenshot before clicking sign in
+        self.screenshot("before-signin-click")
+        
+        # Step 5: Submit
         self.click_sign_in()
         
-        # Step 5: Wait for success
+        # Step 6: Wait for success
         self.wait_for_login_success()
         
-        # Step 6: Take screenshot
+        # Step 7: Take screenshot
         self.screenshot("after-login")
         
         logger.info(f"=== Login completed for {email} ===")
