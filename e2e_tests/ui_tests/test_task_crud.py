@@ -86,32 +86,14 @@ if __name__ == "__main__":
         # Step 3: Click Default workspace
         logger.info("Step 3: Clicking 'Default' workspace")
         workspace_page.click_default_workspace()
-        
-        # Verify we're in Default workspace (URL should contain space parameter)
-        current_url = page.url
-        assert "?space=" in current_url or "space=" in current_url, \
-            f"Should be in workspace view. Current URL: {current_url}"
-        
-        # Ensure workspace is set (not empty)
-        if "?space=" in current_url and current_url.endswith("?space="):
-            logger.warning("Workspace parameter is empty, may need to select workspace again")
-            # Try clicking Default workspace again
-            workspace_page.click_default_workspace()
-            current_url = page.url
-        
-        logger.info(f"✓ In workspace: {current_url}")
+        assert "?space=" in page.url or "space=" in page.url, \
+            "Should be in workspace view"
+        logger.info(f"✓ In Default workspace: {page.url}")
         workspace_page.screenshot("03-task-workspace-view")
         
         # Step 4: Click "New Task" button
         logger.info("Step 4: Clicking 'New Task' button")
         task_page = TaskPage(page)
-        
-        # Verify workspace is still set before creating task
-        workspace_url = page.url
-        logger.info(f"Workspace URL before task creation: {workspace_url}")
-        if "space=" not in workspace_url or workspace_url.endswith("?space="):
-            logger.warning("Workspace not properly set, may affect task creation")
-        
         task_page.click_new_task_button()
         logger.info("✓ New Task dropdown opened")
         task_page.screenshot("04-task-new-task-dropdown")
