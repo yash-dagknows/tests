@@ -372,5 +372,39 @@ class SettingsPage(BasePage):
                 logger.info("No Save button found (settings auto-save)")
         except Exception as e:
             logger.warning(f"Could not save settings: {e}")
+    
+    def get_current_alert_mode(self) -> str:
+        """
+        Get the currently selected alert handling mode.
+        
+        Returns:
+            "deterministic", "ai_selected", "autonomous", or "unknown"
+        """
+        logger.info("Detecting current alert handling mode...")
+        
+        # Look for the radio button or option that appears selected/active
+        # Check for "Active" badge or checked state
+        modes = [
+            ("deterministic", ['text=Deterministic >> .. >> text=Always Active', 
+                              'text=Deterministic >> .. >> [class*="active"]']),
+            ("ai_selected", ['text=AI-Selected >> .. >> text=Active',
+                            'text=AI-Selected >> .. >> [class*="active"]']),
+            ("autonomous", ['text=Autonomous >> .. >> text=Active',
+                           'text=Autonomous >> .. >> [class*="active"]'])
+        ]
+        
+        for mode_name, selectors in modes:
+            for selector in selectors:
+                try:
+                    if self.page.locator(selector).count() > 0:
+                        logger.info(f"✓ Current mode: {mode_name}")
+                        return mode_name
+                except Exception:
+                    pass
+        
+        # Fallback: check for visual indicators in screenshot
+        self.screenshot("current-mode-check")
+        logger.warning("Could not detect current mode from DOM")
+        return "unknown"
 
 

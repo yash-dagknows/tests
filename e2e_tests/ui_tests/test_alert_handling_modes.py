@@ -200,9 +200,15 @@ class TestAlertHandlingModesE2E:
         """
         E2E Test: Configure Autonomous mode and send alert.
         
-        Similar flow to deterministic, but selects Autonomous mode.
+        Autonomous mode should:
+        1. Analyze the alert
+        2. Generate NEW task code dynamically
+        3. Create and execute the task
+        
+        This can take 60-120 seconds as AI generates code!
         """
         logger.info("=== Starting Autonomous Mode Alert Handling E2E Test ===")
+        logger.info("Note: Autonomous mode may take 60-120 seconds to generate task code")
         
         # Get test user
         test_user = get_test_user("Admin")
@@ -232,11 +238,50 @@ class TestAlertHandlingModesE2E:
         settings_page.screenshot("autonomous-mode-selected")
         settings_page.save_settings()
         
-        # Send alert
-        logger.info("Sending alert to Autonomous mode")
-        alert_response = self._send_grafana_alert(test_config)
+        # Wait additional time for mode to be saved and propagated
+        logger.info("Waiting for mode change to propagate (10 seconds)...")
+        page.wait_for_timeout(10000)
+        
+        # Verify mode was switched
+        current_mode = settings_page.get_current_alert_mode()
+        if current_mode != "autonomous":
+            logger.warning(f"⚠ Mode appears to be '{current_mode}', not 'autonomous'")
+            logger.warning("This may explain why it's using existing tasks instead of creating new ones")
+        else:
+            logger.info("✓ Confirmed: Autonomous mode is active")
+        
+        # Send alert with UNIQUE name (to avoid matching existing tasks)
+        logger.info("Sending unique alert to Autonomous mode")
+        logger.info("Using unique alert name to force NEW task creation")
+        alert_response = self._send_autonomous_test_alert(test_config)
         
         logger.info(f"Alert response: {alert_response}")
+        
+        # Analyze response
+        tasks_found = alert_response.get('tasks_found', 0)
+        tasks_executed = alert_response.get('tasks_executed', 0)
+        executed_tasks = alert_response.get('executed_tasks', [])
+        
+        logger.info(f"Tasks found: {tasks_found}")
+        logger.info(f"Tasks executed: {tasks_executed}")
+        
+        if tasks_executed > 0:
+            for task in executed_tasks:
+                task_id = task.get('task_id')
+                logger.info(f"  • Task ID: {task_id}")
+                logger.info(f"    Job ID: {task.get('job_id')}")
+                logger.info(f"    Status: {task.get('status')}")
+                
+                # Check if this is a newly created task or existing task
+                # In autonomous mode, we expect NEW task creation
+                if tasks_found == 0:
+                    logger.info("    ✅ NEW task created by Autonomous mode!")
+                else:
+                    logger.warning("    ⚠ Used EXISTING task - Autonomous should create new tasks")
+                    logger.warning("    This may indicate mode didn't switch properly")
+        else:
+            logger.warning("⚠ No tasks executed in Autonomous mode")
+        
         logger.info("=== Autonomous Mode Alert Handling Test Completed ===")
     
     def _send_grafana_alert(self, test_config) -> dict:
@@ -296,6 +341,76 @@ class TestAlertHandlingModesE2E:
         
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to send alert: {e}")
+            return {
+                "status": "error",
+                "message": str(e),
+                "tasks_executed": 0
+            }
+    
+    def _send_autonomous_test_alert(self, test_config) -> dict:
+        """
+        Send a unique alert for Autonomous mode testing.
+        Uses a unique alert name to avoid matching existing tasks.
+        
+        Returns:
+            Response JSON from the API
+        """
+        # Use unique alert name with timestamp to avoid matching existing tasks
+        timestamp = int(time.time())
+        alert_name = f"AutonomousTest_{timestamp}"
+        
+        url = f"{config.BASE_URL}/processAlert{config.PROXY_PARAM}"
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {config.JWT_TOKEN}"
+        }
+        
+        payload = {
+            "receiver": "Autonomous_Test_Endpoint",
+            "status": "firing",
+            "alerts": [{
+                "status": "firing",
+                "labels": {
+                    "alertname": alert_name,
+                    "grafana_folder": "test",
+                    "instance": "test-server-autonomous",
+                    "severity": "warning"
+                },
+                "annotations": {
+                    "description": f"Autonomous mode test alert - timestamp {timestamp}",
+                    "summary": "Test alert for autonomous task generation"
+                },
+                "startsAt": str(timestamp),
+                "fingerprint": f"autonomous_{timestamp}"
+            }],
+            "groupLabels": {
+                "alertname": alert_name
+            },
+            "commonLabels": {
+                "alertname": alert_name,
+                "severity": "warning"
+            },
+            "commonAnnotations": {
+                "description": f"Autonomous mode test alert - timestamp {timestamp}",
+                "summary": "Test alert for autonomous task generation"
+            },
+            "externalURL": "http://grafana:3000/",
+            "version": "1",
+            "title": f"[FIRING:1] {alert_name}",
+            "state": "alerting"
+        }
+        
+        logger.info(f"Sending unique alert to: {url}")
+        logger.info(f"Alert name: {alert_name} (unique for autonomous test)")
+        logger.info("Autonomous mode should CREATE a new task, not use existing one")
+        
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=120)  # Longer timeout for autonomous
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
