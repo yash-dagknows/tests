@@ -218,40 +218,66 @@ class AIAgentPage(BasePage):
     
     def type_message(self, message: str) -> None:
         """
-        Type message in chat input.
+        Type message in the AI Agent chat input box (the "How can I help" text box).
         
         Args:
             message: Message to type
         """
         logger.info(f"Typing message: {message[:50]}...")
         
-        # Find chat input (try multiple selectors)
+        # Take screenshot before typing
+        self.screenshot("before-typing-message")
+        
+        # Find chat input - try multiple selectors
+        # Based on the screenshot, looking for the text box with "How can I help" placeholder
         chat_input = None
         selectors = [
+            'textarea[placeholder*="How can I help"]',  # Exact match for "How can I help"
+            'input[placeholder*="How can I help"]',
+            'textarea[placeholder*="help"]',  # Partial match
+            'input[placeholder*="help"]',
             'textarea[placeholder*="Ask"]',
             'input[placeholder*="Ask"]',
             'textarea[placeholder*="anything"]',
             'input[placeholder*="anything"]',
-            'textarea',
-            'div[contenteditable="true"]'
+            'textarea',  # Any textarea as fallback
+            'div[contenteditable="true"]',  # Contenteditable div
         ]
         
         for selector in selectors:
-            locator = self.page.locator(selector)
-            if locator.count() > 0 and locator.first.is_visible():
-                chat_input = locator.first
-                break
+            try:
+                locator = self.page.locator(selector)
+                count = locator.count()
+                if count > 0:
+                    # Check if visible
+                    first_match = locator.first
+                    if first_match.is_visible():
+                        logger.info(f"Found chat input with selector: {selector}")
+                        chat_input = first_match
+                        break
+            except Exception as e:
+                logger.debug(f"Selector '{selector}' failed: {e}")
         
         if chat_input:
+            # Wait for input to be ready
+            chat_input.wait_for(state="visible", timeout=5000)
+            
             # Click to focus
             chat_input.click()
+            
+            # Wait a moment for focus
+            self.page.wait_for_timeout(500)
             
             # Clear any existing text
             chat_input.fill("")
             
             # Type message
             chat_input.fill(message)
-            logger.info("✓ Message typed")
+            
+            logger.info("✓ Message typed successfully")
+            
+            # Take screenshot after typing
+            self.screenshot("after-typing-message")
         else:
             logger.error("Could not find chat input field")
             self.screenshot("chat-input-not-found")

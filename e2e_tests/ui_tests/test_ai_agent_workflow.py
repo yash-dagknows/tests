@@ -128,8 +128,8 @@ class TestAIAgentWorkflowE2E:
         assert ai_agent_page.verify_agent_mode_active(), \
             "Agent mode should be active"
         
-        # Type and send message
-        test_prompt = "Create a task to check server CPU usage and restart the service if needed"
+        # Type and send message to AI Agent
+        test_prompt = "List all my AWS S3 buckets"
         ai_agent_page.send_message(test_prompt)
         
         logger.info(f"✓ Message sent: {test_prompt}")
@@ -179,7 +179,7 @@ class TestAIAgentWorkflowE2E:
         ai_agent_page.wait_for_agent_page_loaded()
         
         # Send a simple message
-        test_prompt = "Help me troubleshoot high memory usage"
+        test_prompt = "List all AWS EC2 instances in us-west-2"
         ai_agent_page.send_message(test_prompt)
         
         logger.info(f"✓ Message sent: {test_prompt}")
@@ -213,7 +213,7 @@ class TestAIAgentWorkflowE2E:
         ai_agent_page.navigate_to_ai_agent_directly(workspace="")
         
         # Use complete workflow helper
-        prompt = "Create a monitoring task for database performance"
+        prompt = "Generate a Fibonacci series for me till n=10"
         ai_agent_page.complete_ai_agent_workflow(
             prompt=prompt,
             wait_for_response=True
