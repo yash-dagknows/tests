@@ -242,13 +242,8 @@ class TestAlertHandlingModesE2E:
         logger.info("Waiting for mode change to propagate (10 seconds)...")
         page.wait_for_timeout(10000)
         
-        # Verify mode was switched
-        current_mode = settings_page.get_current_alert_mode()
-        if current_mode != "autonomous":
-            logger.warning(f"⚠ Mode appears to be '{current_mode}', not 'autonomous'")
-            logger.warning("This may explain why it's using existing tasks instead of creating new ones")
-        else:
-            logger.info("✓ Confirmed: Autonomous mode is active")
+        # Note: Mode verification from UI is tricky, so we'll verify from API response instead
+        logger.info("Mode selection complete - will verify from API response")
         
         # Send alert with UNIQUE name (to avoid matching existing tasks)
         logger.info("Sending unique alert to Autonomous mode")
@@ -257,30 +252,44 @@ class TestAlertHandlingModesE2E:
         
         logger.info(f"Alert response: {alert_response}")
         
+        # Verify autonomous mode from API response
+        response_mode = alert_response.get('incident_response_mode', 'unknown')
+        logger.info(f"✓ API Response Mode: {response_mode}")
+        
+        if response_mode == 'autonomous':
+            logger.info("✅ Confirmed: Autonomous mode is active (from API)")
+        else:
+            logger.warning(f"⚠ API shows mode: {response_mode} (expected: autonomous)")
+        
         # Analyze response
         tasks_found = alert_response.get('tasks_found', 0)
         tasks_executed = alert_response.get('tasks_executed', 0)
-        executed_tasks = alert_response.get('executed_tasks', [])
+        runbook_task_id = alert_response.get('runbook_task_id', None)
+        child_task_id = alert_response.get('child_task_id', None)
+        message = alert_response.get('message', '')
         
-        logger.info(f"Tasks found: {tasks_found}")
+        logger.info(f"Tasks found (existing): {tasks_found}")
         logger.info(f"Tasks executed: {tasks_executed}")
+        if runbook_task_id:
+            logger.info(f"Runbook task ID: {runbook_task_id}")
+        if child_task_id:
+            logger.info(f"Child task ID: {child_task_id}")
+        if message:
+            logger.info(f"Message: {message}")
         
-        if tasks_executed > 0:
-            for task in executed_tasks:
-                task_id = task.get('task_id')
-                logger.info(f"  • Task ID: {task_id}")
-                logger.info(f"    Job ID: {task.get('job_id')}")
-                logger.info(f"    Status: {task.get('status')}")
-                
-                # Check if this is a newly created task or existing task
-                # In autonomous mode, we expect NEW task creation
-                if tasks_found == 0:
-                    logger.info("    ✅ NEW task created by Autonomous mode!")
-                else:
-                    logger.warning("    ⚠ Used EXISTING task - Autonomous should create new tasks")
-                    logger.warning("    This may indicate mode didn't switch properly")
+        # Autonomous mode specific analysis
+        if tasks_found == 0 and tasks_executed > 0:
+            logger.info("✅ SUCCESS: Autonomous mode created NEW task dynamically!")
+            logger.info("This is the expected autonomous behavior")
+        elif tasks_found > 0:
+            logger.warning("⚠ Found existing task - autonomous used it instead of creating new")
+            logger.warning("This is valid fallback behavior but not pure autonomous")
         else:
-            logger.warning("⚠ No tasks executed in Autonomous mode")
+            logger.warning("⚠ No tasks executed")
+        
+        # Verify autonomous created tasks
+        if runbook_task_id or child_task_id:
+            logger.info("✅ Autonomous mode created runbook and/or child tasks")
         
         logger.info("=== Autonomous Mode Alert Handling Test Completed ===")
     

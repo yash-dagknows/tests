@@ -172,4 +172,130 @@ class WorkspacePage(BasePage):
         workspaces = [link.text_content().strip() for link in workspace_links]
         logger.info(f"Found workspaces: {workspaces}")
         return workspaces
+    
+    def click_workspace_folder_icon(self) -> None:
+        """
+        Click the folder icon in the left navigation to open workspace dropdown.
+        This opens a dropdown menu with all available workspaces.
+        """
+        logger.info("Clicking workspace folder icon in left navigation")
+        self.screenshot("before-folder-icon-click")
+        
+        # Try multiple selectors for the folder icon
+        folder_icon_selectors = [
+            '[data-testid="workspace-selector"]',
+            'button[aria-label*="workspace"]',
+            'button[aria-label*="Workspace"]',
+            'button:has(svg)',  # SVG icons
+            'div[role="button"]',
+            # CSS selectors based on common patterns
+            '.workspace-selector',
+            '.folder-icon',
+            # XPath as fallback
+            '//button[contains(@aria-label, "workspace")]',
+            '//div[@role="button"]'
+        ]
+        
+        clicked = False
+        for selector in folder_icon_selectors:
+            try:
+                locator = self.page.locator(selector)
+                count = locator.count()
+                logger.debug(f"Found {count} elements with selector: {selector}")
+                
+                if count > 0:
+                    # In left nav, folder icon is typically at the top
+                    element = locator.first
+                    if element.is_visible():
+                        element.click()
+                        clicked = True
+                        logger.info(f"✓ Clicked folder icon with selector: {selector}")
+                        break
+            except Exception as e:
+                logger.debug(f"Selector '{selector}' failed: {e}")
+        
+        if not clicked:
+            # Fallback: Try to find by position (first button-like element in left nav)
+            logger.warning("Could not find folder icon, trying positional fallback")
+            try:
+                # Try clicking first icon-like element in left sidebar
+                self.page.locator('nav button, aside button').first.click()
+                clicked = True
+                logger.info("✓ Clicked first button in navigation (fallback)")
+            except Exception as e:
+                logger.error(f"Fallback also failed: {e}")
+        
+        if not clicked:
+            self.screenshot("folder-icon-not-found")
+            raise Exception("Could not find or click workspace folder icon")
+        
+        # Wait for dropdown to appear
+        self.page.wait_for_timeout(1000)
+        self.screenshot("after-folder-icon-click")
+        logger.info("✓ Workspace dropdown opened")
+    
+    def select_workspace_from_dropdown(self, workspace_name: str) -> None:
+        """
+        Select a workspace from the dropdown menu.
+        
+        Args:
+            workspace_name: Name of workspace to select
+        """
+        logger.info(f"Selecting workspace '{workspace_name}' from dropdown")
+        self.screenshot(f"before-selecting-{workspace_name}-from-dropdown")
+        
+        # Try multiple selectors for workspace in dropdown
+        workspace_selectors = [
+            f'[role="menuitem"]:has-text("{workspace_name}")',
+            f'[role="option"]:has-text("{workspace_name}")',
+            f'button:has-text("{workspace_name}")',
+            f'a:has-text("{workspace_name}")',
+            f'div[role="menu"] >> text={workspace_name}',
+            f'ul[role="menu"] >> text={workspace_name}',
+            f'//div[@role="menu"]//a[contains(., "{workspace_name}")]',
+            f'//ul[@role="menu"]//a[contains(., "{workspace_name}")]',
+        ]
+        
+        clicked = False
+        for selector in workspace_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    locator.first.scroll_into_view_if_needed()
+                    locator.first.wait_for(state="visible", timeout=5000)
+                    locator.first.click()
+                    clicked = True
+                    logger.info(f"✓ Clicked workspace '{workspace_name}' with selector: {selector}")
+                    break
+            except Exception as e:
+                logger.debug(f"Selector '{selector}' failed: {e}")
+        
+        if not clicked:
+            self.screenshot(f"workspace-{workspace_name}-not-in-dropdown")
+            raise Exception(f"Could not find workspace '{workspace_name}' in dropdown")
+        
+        # Wait for navigation
+        self.page.wait_for_timeout(2000)
+        self.page.wait_for_load_state("networkidle", timeout=10000)
+        
+        # Verify we're in the workspace
+        current_url = self.page.url
+        logger.info(f"Current URL after selecting workspace: {current_url}")
+        
+        if "space=" not in current_url:
+            logger.warning(f"URL does not contain 'space=' parameter: {current_url}")
+        
+        self.screenshot(f"after-selecting-{workspace_name}")
+        logger.info(f"✓ Navigated to workspace: {workspace_name}")
+    
+    def navigate_to_workspace_via_dropdown(self, workspace_name: str) -> None:
+        """
+        Complete workflow: Click folder icon and select workspace from dropdown.
+        
+        Args:
+            workspace_name: Name of workspace to navigate to
+        """
+        logger.info(f"Navigating to workspace '{workspace_name}' via dropdown")
+        self.click_workspace_folder_icon()
+        self.select_workspace_from_dropdown(workspace_name)
 

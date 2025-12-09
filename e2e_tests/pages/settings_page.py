@@ -18,12 +18,19 @@ class SettingsPage(BasePage):
     SETTINGS_HEADING = 'text=Settings'
     
     # Tab selectors (horizontal strip at top)
-    GENERAL_TAB = 'button:has-text("General"), a:has-text("General")'
-    AI_TAB = 'button:has-text("AI"), a:has-text("AI")'
-    USERS_TAB = 'button:has-text("Users"), a:has-text("Users")'
-    WORKSPACES_TAB = 'button:has-text("Workspaces"), a:has-text("Workspaces")'
-    PROXIES_TAB = 'button:has-text("Proxies"), a:has-text("Proxies")'
-    AUTH_TOOLS_TAB = 'button:has-text("Authentication Tools"), a:has-text("Authentication Tools")'
+    GENERAL_TAB = 'button:has-text("General"), [role="tab"]:has-text("General")'
+    AI_TAB = 'button:has-text("AI"), [role="tab"]:has-text("AI")'
+    USERS_TAB = 'button:has-text("Users"), [role="tab"]:has-text("Users")'
+    WORKSPACES_TAB = 'button:has-text("Workspaces"), [role="tab"]:has-text("Workspaces")'
+    PROXIES_TAB = 'button:has-text("Proxies"), [role="tab"]:has-text("Proxies")'
+    AUTH_TOOLS_TAB = 'button:has-text("Authentication Tools"), [role="tab"]:has-text("Authentication Tools")'
+    
+    # Workspace management selectors
+    WORKSPACE_NAME_INPUT = 'input[placeholder="Workspace name"], input[name*="workspace"]'
+    ADD_WORKSPACE_BUTTON = 'button:has-text("Add")'
+    CURRENT_WORKSPACES_HEADING = 'text=Current workspaces'
+    WORKSPACE_TABLE = 'table'
+    WORKSPACE_ROW = 'tr:has-text("{workspace_name}")'
     
     # Incident Response section selectors
     INCIDENT_RESPONSE_HEADING = 'text=Incident Response'
@@ -406,5 +413,162 @@ class SettingsPage(BasePage):
         self.screenshot("current-mode-check")
         logger.warning("Could not detect current mode from DOM")
         return "unknown"
+    
+    def click_workspaces_tab(self) -> None:
+        """Click the Workspaces tab in the horizontal tab strip."""
+        logger.info("Clicking Workspaces tab")
+        self.screenshot("before-workspaces-tab-click")
+        
+        # Try multiple selectors for Workspaces tab
+        workspaces_tab_selectors = [
+            '[role="tab"]:has-text("Workspaces")',
+            'button:has-text("Workspaces")',
+            'a:has-text("Workspaces")',
+        ]
+        
+        clicked = False
+        for selector in workspaces_tab_selectors:
+            try:
+                locator = self.page.locator(selector)
+                count = locator.count()
+                if count > 0:
+                    # Find the tab in the horizontal strip (not nav link)
+                    for i in range(count):
+                        element = locator.nth(i)
+                        text = element.text_content() or ""
+                        if "Workspaces" in text and len(text.strip()) < 20:
+                            logger.info(f"Found Workspaces tab with selector: {selector}")
+                            element.wait_for(state="visible", timeout=5000)
+                            element.click()
+                            clicked = True
+                            logger.info("✓ Clicked Workspaces tab")
+                            break
+                    if clicked:
+                        break
+            except Exception as e:
+                logger.debug(f"Selector '{selector}' failed: {e}")
+        
+        if not clicked:
+            self.screenshot("workspaces-tab-not-found")
+            raise Exception("Could not find Workspaces tab")
+        
+        # Wait for workspace settings to load
+        self.page.wait_for_timeout(2000)
+        self.page.wait_for_load_state("networkidle", timeout=10000)
+        self.screenshot("after-workspaces-tab-click")
+        logger.info("✓ Workspaces settings loaded")
+    
+    def create_workspace(self, workspace_name: str) -> None:
+        """
+        Create a new workspace.
+        
+        Args:
+            workspace_name: Name of the workspace to create
+        """
+        logger.info(f"Creating workspace: {workspace_name}")
+        self.screenshot(f"before-create-workspace-{workspace_name}")
+        
+        # Find workspace name input
+        input_selectors = [
+            'input[placeholder="Workspace name"]',
+            'input[name*="workspace"]',
+            'input[type="text"]',
+        ]
+        
+        workspace_input = None
+        for selector in input_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    first_input = locator.first
+                    if first_input.is_visible():
+                        workspace_input = first_input
+                        logger.info(f"Found workspace input with: {selector}")
+                        break
+            except Exception:
+                pass
+        
+        if not workspace_input:
+            self.screenshot("workspace-input-not-found")
+            raise Exception("Could not find workspace name input field")
+        
+        # Clear and type workspace name
+        workspace_input.click()
+        workspace_input.fill("")
+        workspace_input.fill(workspace_name)
+        logger.info(f"✓ Typed workspace name: {workspace_name}")
+        self.screenshot(f"after-typing-workspace-{workspace_name}")
+        
+        # Click Add button
+        add_button_selectors = [
+            'button:has-text("Add")',
+            'button[type="submit"]',
+            'input[type="submit"][value="Add"]',
+        ]
+        
+        add_clicked = False
+        for selector in add_button_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    locator.first.click()
+                    add_clicked = True
+                    logger.info("✓ Clicked Add button")
+                    break
+            except Exception as e:
+                logger.debug(f"Add button selector '{selector}' failed: {e}")
+        
+        if not add_clicked:
+            self.screenshot("add-button-not-found")
+            raise Exception("Could not find or click Add button")
+        
+        # Wait for workspace to be created
+        self.page.wait_for_timeout(3000)
+        self.screenshot(f"after-create-workspace-{workspace_name}")
+        logger.info(f"✓ Workspace '{workspace_name}' creation requested")
+    
+    def verify_workspace_in_list(self, workspace_name: str, timeout: int = 10000) -> bool:
+        """
+        Verify that a workspace appears in the Current workspaces list.
+        
+        Args:
+            workspace_name: Workspace name to verify
+            timeout: Wait timeout in ms
+            
+        Returns:
+            True if workspace found, False otherwise
+        """
+        logger.info(f"Verifying workspace '{workspace_name}' in list")
+        self.screenshot(f"checking-workspace-{workspace_name}")
+        
+        # Wait for Current workspaces section to load
+        try:
+            self.page.locator('text=Current workspaces').wait_for(
+                state="visible",
+                timeout=5000
+            )
+        except Exception:
+            logger.warning("Could not find 'Current workspaces' heading")
+        
+        # Look for workspace in the table
+        workspace_selectors = [
+            f'text={workspace_name}',
+            f'tr:has-text("{workspace_name}")',
+            f'td:has-text("{workspace_name}")',
+        ]
+        
+        for selector in workspace_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    locator.first.wait_for(state="visible", timeout=timeout)
+                    logger.info(f"✓ Workspace '{workspace_name}' found in list")
+                    return True
+            except Exception as e:
+                logger.debug(f"Selector '{selector}' not found: {e}")
+        
+        logger.warning(f"✗ Workspace '{workspace_name}' not found in list")
+        self.screenshot(f"workspace-{workspace_name}-not-found")
+        return False
 
 
