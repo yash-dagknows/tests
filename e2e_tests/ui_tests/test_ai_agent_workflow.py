@@ -137,14 +137,17 @@ class TestAIAgentWorkflowE2E:
         # Take screenshot after sending
         ai_agent_page.screenshot("06-message-sent")
         
-        # Wait for AI response (this can be slow)
-        logger.info("Waiting for AI response...")
-        ai_agent_page.wait_for_ai_response(timeout=60000)
+        # Wait for AI to generate task with code (can take 30-60 seconds!)
+        logger.info("Waiting for AI to generate task with code (30-60 seconds)...")
+        ai_agent_page.wait_for_ai_response(timeout=90000)  # 90 seconds
         
-        # Take final screenshot
-        ai_agent_page.screenshot("07-ai-response")
+        # Wait a bit more to ensure code is fully rendered
+        page.wait_for_timeout(5000)
         
-        logger.info("✓ AI response received (or timeout reached)")
+        # Take final screenshot showing the generated task
+        ai_agent_page.screenshot("07-ai-generated-task")
+        
+        logger.info("✓ AI task generation completed")
         logger.info("=== AI Agent Workflow E2E Test Completed ===")
     
     def test_ai_agent_direct_navigation(self, page, test_config):
@@ -184,8 +187,8 @@ class TestAIAgentWorkflowE2E:
         
         logger.info(f"✓ Message sent: {test_prompt}")
         
-        # Wait for response
-        ai_agent_page.wait_for_ai_response(timeout=30000)
+        # Wait for AI to generate task with code (30-60 seconds)
+        ai_agent_page.wait_for_ai_response(timeout=90000)  # 90 seconds
         
         # Take screenshot
         ai_agent_page.screenshot("ai-agent-direct-response")

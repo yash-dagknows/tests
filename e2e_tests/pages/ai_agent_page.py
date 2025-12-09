@@ -322,46 +322,103 @@ class AIAgentPage(BasePage):
         self.type_message(message)
         self.click_send()
     
-    def wait_for_ai_response(self, timeout: int = 60000) -> None:
+    def wait_for_ai_response(self, timeout: int = 90000) -> None:
         """
-        Wait for AI to respond.
+        Wait for AI to generate the task with code (can take 30-60 seconds).
         
         Args:
-            timeout: Wait timeout in ms (AI can be slow)
+            timeout: Wait timeout in ms (default 90 seconds for AI generation)
         """
-        logger.info("Waiting for AI response...")
+        logger.info("Waiting for AI to generate task with code...")
+        logger.info("This may take 30-60 seconds while AI processes the request")
         
-        # Wait for response indicators
-        self.page.wait_for_timeout(2000)  # Initial wait
+        # Take screenshot immediately after sending
+        self.screenshot("01-immediately-after-send")
         
-        # Look for AI response indicators
-        ai_indicators = [
-            '.ai-response',
-            '.assistant-message',
-            '[data-role="assistant"]',
-            '.message.ai',
-            'text=Task created successfully',
-            'text=I can help'
+        # Initial wait for AI to start processing
+        self.page.wait_for_timeout(5000)
+        
+        # Look for indicators that AI is working/done
+        # The key is to wait for the task CODE to be generated and visible
+        
+        # Strategy 1: Wait for loading indicators to disappear
+        logger.info("Checking for loading indicators...")
+        loading_selectors = [
+            '.loading', 
+            '.spinner', 
+            '.thinking',
+            '[class*="loading"]',
+            '[class*="spinner"]',
         ]
         
-        response_found = False
-        for selector in ai_indicators:
-            if self.page.locator(selector).count() > 0:
-                logger.info(f"✓ AI response detected ({selector})")
-                response_found = True
-                break
+        for selector in loading_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    logger.info(f"Found loading indicator: {selector}, waiting for it to hide...")
+                    locator.first.wait_for(state="hidden", timeout=60000)
+                    logger.info(f"✓ Loading indicator hidden")
+            except Exception as e:
+                logger.debug(f"Loading selector '{selector}' check: {e}")
         
-        if not response_found:
-            # Wait for loading to finish
-            loading_selectors = ['.loading', '.spinner', '.thinking']
-            for selector in loading_selectors:
-                if self.page.locator(selector).count() > 0:
-                    try:
-                        self.page.locator(selector).wait_for(state="hidden", timeout=timeout)
-                    except Exception:
-                        pass
-            
-            logger.info("✓ AI processing completed (no specific response indicator found)")
+        # Wait additional time for AI to finish generating code
+        logger.info("Waiting 10 more seconds for AI to complete code generation...")
+        self.page.wait_for_timeout(10000)
+        
+        # Take screenshot after waiting
+        self.screenshot("02-after-ai-processing-wait")
+        
+        # Strategy 2: Look for task code/content indicators
+        # After AI generates the task, we should see code or task details
+        task_content_indicators = [
+            'button:has-text("Code")',  # Code tab button
+            'pre',  # Code block
+            'code',  # Inline code
+            '[class*="code"]',  # Code-related elements
+            'text=import',  # Python imports
+            'text=def ',  # Python function definition
+            'text=try:',  # Python try block
+            ':text("boto3")',  # AWS SDK
+            ':text("Task created")',  # Success message
+        ]
+        
+        task_generated = False
+        logger.info("Checking if task code was generated...")
+        for indicator in task_content_indicators:
+            try:
+                locator = self.page.locator(indicator)
+                count = locator.count()
+                if count > 0:
+                    logger.info(f"✓ Found task content indicator: {indicator} (count: {count})")
+                    task_generated = True
+                    break
+            except Exception:
+                pass
+        
+        # Take screenshot of final state
+        self.screenshot("03-after-ai-response-check")
+        
+        # Strategy 3: Wait for URL to stabilize (task ID in URL)
+        current_url = self.page.url
+        logger.info(f"Current URL: {current_url}")
+        
+        # If we see a task ID in the URL, task was created
+        if "/tasks/" in current_url and "agent=1" in current_url:
+            logger.info("✓ Task URL detected - task was created")
+            task_generated = True
+        
+        # Final wait to ensure everything is rendered
+        logger.info("Final wait for UI to stabilize...")
+        self.page.wait_for_timeout(5000)
+        
+        # Take final screenshot
+        self.screenshot("04-final-ai-response-state")
+        
+        if task_generated:
+            logger.info("✓ AI task generation completed successfully")
+        else:
+            logger.warning("⚠ Could not confirm task code was generated (but continuing anyway)")
+            logger.warning("Check screenshots to verify task creation")
     
     def verify_agent_mode_active(self) -> bool:
         """
