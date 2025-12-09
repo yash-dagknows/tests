@@ -478,7 +478,11 @@ class TaskPage(BasePage):
             logger.warning(f"Could not scroll to bottom: {e}")
     
     def click_save_button(self) -> None:
-        """Click Save button to save the task."""
+        """Click Save button to save the task.
+        
+        The Save button is at the bottom of the page, below the code editor,
+        on the left side. It's a blue button with a checkmark icon.
+        """
         logger.info("Clicking Save button")
         self.screenshot("before-save-click")
         
@@ -486,37 +490,116 @@ class TaskPage(BasePage):
         url_before_save = self.page.url
         logger.info(f"URL before save: {url_before_save}")
         
-        # Scroll to bottom first to ensure Save button is visible
-        self.scroll_to_bottom()
+        # Scroll to very bottom multiple times to ensure Save button is visible
+        logger.info("Scrolling to very bottom to find Save button")
+        for i in range(5):  # Scroll 5 times to reach very bottom
+            self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            self.page.wait_for_timeout(500)
         
-        # Try multiple selectors for Save button
+        # Additional scroll by large amount
+        self.page.evaluate("window.scrollBy(0, 10000)")
+        self.page.wait_for_timeout(1000)
+        
+        self.screenshot("after-scroll-to-very-bottom")
+        logger.info("✓ Scrolled to very bottom")
+        
+        # Try multiple selectors for Save button (prioritize checkmark icon)
         save_selectors = [
+            # Button with checkmark icon (SVG or icon class)
+            'button:has(svg) >> text=Save',
+            'button:has([class*="check"]) >> text=Save',
+            'button:has([class*="icon"]) >> text=Save',
+            # Blue button with Save text
+            'button.btn-primary:has-text("Save")',
+            'button[class*="primary"]:has-text("Save")',
+            'button[class*="blue"]:has-text("Save")',
+            # Generic Save button
             'button:has-text("Save")',
             'button[type="submit"]',
-            'button.btn-primary:has-text("Save")',
+            # Input submit
             'input[type="submit"][value="Save"]',
+            # Alternative text
             'button:has-text("Create Task")',
             'button:has-text("Create")',
         ]
         
         clicked = False
+        save_button = None
+        
         for selector in save_selectors:
-            locator = self.page.locator(selector)
-            if locator.count() > 0:
-                try:
-                    # Try all matching elements
-                    for i in range(locator.count()):
+            try:
+                locator = self.page.locator(selector)
+                count = locator.count()
+                logger.debug(f"Save selector '{selector}' found {count} elements")
+                
+                if count > 0:
+                    # Try all matching elements, prioritize visible ones at bottom
+                    for i in range(count):
                         element = locator.nth(i)
-                        if element.is_visible():
-                            element.scroll_into_view_if_needed()
-                            element.click()
-                            clicked = True
-                            logger.info(f"✓ Clicked Save button with selector: {selector}")
-                            break
-                    if clicked:
+                        try:
+                            if element.is_visible():
+                                # Check if it's in the lower part of the page (Save is at bottom)
+                                box = element.bounding_box()
+                                if box:
+                                    # Save button should be near bottom (y > 600)
+                                    if box['y'] > 600:
+                                        save_button = element
+                                        logger.info(f"Found Save button with: {selector} at y={box['y']}")
+                                        break
+                                    elif not save_button:  # Keep first visible as fallback
+                                        save_button = element
+                        except Exception:
+                            pass
+                    
+                    if save_button:
                         break
-                except Exception as e:
-                    logger.debug(f"Could not click Save with {selector}: {e}")
+            except Exception as e:
+                logger.debug(f"Could not find Save with {selector}: {e}")
+        
+        # If found, click it
+        if save_button:
+            try:
+                save_button.scroll_into_view_if_needed()
+                self.page.wait_for_timeout(1000)  # Wait for button to be ready
+                
+                # Check if button is enabled
+                is_disabled = save_button.is_disabled()
+                if is_disabled:
+                    logger.warning("Save button is disabled, waiting for it to be enabled...")
+                    save_button.wait_for(state="visible", timeout=5000)
+                    # Wait a bit more for form validation
+                    self.page.wait_for_timeout(2000)
+                
+                # Click the button
+                save_button.click()
+                clicked = True
+                logger.info("✓ Clicked Save button")
+            except Exception as e:
+                logger.error(f"Could not click Save button: {e}")
+                self.screenshot("save-button-click-failed")
+        
+        # Fallback: Try to find any button at the bottom with "Save" text
+        if not clicked:
+            logger.warning("Trying fallback: finding Save button by position")
+            try:
+                all_buttons = self.page.locator('button').all()
+                logger.info(f"Found {len(all_buttons)} total buttons on page")
+                
+                for btn in all_buttons:
+                    try:
+                        text = btn.text_content() or ""
+                        if "Save" in text and btn.is_visible():
+                            box = btn.bounding_box()
+                            if box and box['y'] > 600:  # Bottom of page
+                                btn.scroll_into_view_if_needed()
+                                btn.click()
+                                clicked = True
+                                logger.info(f"✓ Clicked Save button (fallback) at y={box['y']}")
+                                break
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.error(f"Fallback failed: {e}")
         
         if not clicked:
             self.screenshot("save-button-not-found")
@@ -525,12 +608,15 @@ class TaskPage(BasePage):
         # Wait for save to process and navigation to task detail page
         logger.info("Waiting for task to be created and navigation to task detail page...")
         
+        # Wait a moment for form submission to start
+        self.page.wait_for_timeout(2000)
+        
         # Wait for URL to change from task-create to task detail page
         try:
             # Wait for URL to change (should navigate away from task-create)
             self.page.wait_for_url(
                 lambda url: "task-create" not in url or "taskId=" in url or "/task/" in url,
-                timeout=15000
+                timeout=20000  # Increased timeout to 20 seconds
             )
             url_after_save = self.page.url
             logger.info(f"✓ URL changed after save: {url_after_save}")
@@ -538,6 +624,8 @@ class TaskPage(BasePage):
             logger.warning(f"URL did not change within timeout: {e}")
             url_after_save = self.page.url
             logger.info(f"Current URL: {url_after_save}")
+            # Take screenshot to see what's happening
+            self.screenshot("url-did-not-change-after-save")
         
         # Additional wait for page to fully load
         self.page.wait_for_timeout(2000)
