@@ -482,6 +482,10 @@ class TaskPage(BasePage):
         logger.info("Clicking Save button")
         self.screenshot("before-save-click")
         
+        # Get current URL before save
+        url_before_save = self.page.url
+        logger.info(f"URL before save: {url_before_save}")
+        
         # Scroll to bottom first to ensure Save button is visible
         self.scroll_to_bottom()
         
@@ -518,21 +522,45 @@ class TaskPage(BasePage):
             self.screenshot("save-button-not-found")
             raise Exception("Could not find or click Save button")
         
-        # Wait for save to complete
-        self.page.wait_for_timeout(3000)
+        # Wait for save to process and navigation to task detail page
+        logger.info("Waiting for task to be created and navigation to task detail page...")
         
-        # Wait for navigation
+        # Wait for URL to change from task-create to task detail page
         try:
-            self.page.wait_for_load_state("networkidle", timeout=15000)
+            # Wait for URL to change (should navigate away from task-create)
+            self.page.wait_for_url(
+                lambda url: "task-create" not in url or "taskId=" in url or "/task/" in url,
+                timeout=15000
+            )
+            url_after_save = self.page.url
+            logger.info(f"✓ URL changed after save: {url_after_save}")
+        except Exception as e:
+            logger.warning(f"URL did not change within timeout: {e}")
+            url_after_save = self.page.url
+            logger.info(f"Current URL: {url_after_save}")
+        
+        # Additional wait for page to fully load
+        self.page.wait_for_timeout(2000)
+        
+        # Wait for network idle
+        try:
+            self.page.wait_for_load_state("networkidle", timeout=10000)
         except Exception as e:
             logger.warning(f"Network idle timeout after save: {e}")
         
         self.screenshot("after-save-click")
-        logger.info("✓ Save button clicked")
+        logger.info("✓ Save button clicked and waiting for task creation")
     
     def verify_task_created(self, title: str) -> bool:
         """
         Verify task was created successfully.
+        
+        After saving, the page should navigate from:
+        - task-create?space=... 
+        to:
+        - /task/<taskId>?space=... OR
+        - ?taskId=<id>&space=... OR
+        - /tasks/<taskId>?space=...
         
         Args:
             title: Expected task title
@@ -546,20 +574,30 @@ class TaskPage(BasePage):
         current_url = self.page.url
         logger.info(f"Current URL: {current_url}")
         
-        # Check if URL contains task ID or task-specific path
-        url_indicators = [
+        # Check if we navigated away from task-create page
+        if "task-create" in current_url:
+            logger.warning(f"Still on task-create page: {current_url}")
+            logger.warning("Task may not have been created, or navigation is slow")
+            self.screenshot("still-on-task-create-page")
+            return False
+        
+        # Check if URL contains task ID or task detail page indicators
+        task_detail_indicators = [
             "taskId=",
             "/task/",
             "/tasks/",
-            "task-create",
         ]
         
-        has_task_url = any(indicator in current_url for indicator in url_indicators)
+        has_task_detail_url = any(indicator in current_url for indicator in task_detail_indicators)
         
-        if has_task_url:
-            logger.info(f"✓ URL indicates task page: {current_url}")
+        if has_task_detail_url:
+            logger.info(f"✓ Navigated to task detail page: {current_url}")
         else:
-            logger.warning(f"URL does not clearly indicate task page: {current_url}")
+            logger.warning(f"URL does not clearly indicate task detail page: {current_url}")
+            # Still check if we're not on task-create anymore
+            if "task-create" not in current_url:
+                logger.info("✓ Navigated away from task-create page (likely task created)")
+                has_task_detail_url = True
         
         # Try to find task title on page
         try:
@@ -578,14 +616,9 @@ class TaskPage(BasePage):
         except Exception as e:
             logger.debug(f"Could not find task title on page: {e}")
         
-        # If URL has task indicator, consider it successful even if title not found
-        if has_task_url:
-            logger.info("✓ Task appears to be created (URL has task indicator)")
-            return True
-        
-        # Last resort: Check if we're not on the creation form anymore
-        if "task-create" not in current_url and "/n/" not in current_url:
-            logger.info("✓ Navigated away from creation form, likely task created")
+        # If URL indicates task detail page, consider it successful
+        if has_task_detail_url:
+            logger.info("✓ Task appears to be created (navigated to task detail page)")
             return True
         
         logger.warning("Could not definitively verify task creation")

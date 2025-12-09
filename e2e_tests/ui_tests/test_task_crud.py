@@ -86,14 +86,32 @@ if __name__ == "__main__":
         # Step 3: Click Default workspace
         logger.info("Step 3: Clicking 'Default' workspace")
         workspace_page.click_default_workspace()
-        assert "?space=" in page.url or "space=" in page.url, \
-            "Should be in workspace view"
-        logger.info(f"✓ In Default workspace: {page.url}")
+        
+        # Verify we're in Default workspace (URL should contain space parameter)
+        current_url = page.url
+        assert "?space=" in current_url or "space=" in current_url, \
+            f"Should be in workspace view. Current URL: {current_url}"
+        
+        # Ensure workspace is set (not empty)
+        if "?space=" in current_url and current_url.endswith("?space="):
+            logger.warning("Workspace parameter is empty, may need to select workspace again")
+            # Try clicking Default workspace again
+            workspace_page.click_default_workspace()
+            current_url = page.url
+        
+        logger.info(f"✓ In workspace: {current_url}")
         workspace_page.screenshot("03-task-workspace-view")
         
         # Step 4: Click "New Task" button
         logger.info("Step 4: Clicking 'New Task' button")
         task_page = TaskPage(page)
+        
+        # Verify workspace is still set before creating task
+        workspace_url = page.url
+        logger.info(f"Workspace URL before task creation: {workspace_url}")
+        if "space=" not in workspace_url or workspace_url.endswith("?space="):
+            logger.warning("Workspace not properly set, may affect task creation")
+        
         task_page.click_new_task_button()
         logger.info("✓ New Task dropdown opened")
         task_page.screenshot("04-task-new-task-dropdown")
@@ -132,16 +150,39 @@ if __name__ == "__main__":
         
         # Step 8: Verify task creation
         logger.info("Step 8: Verifying task creation")
+        
+        # Wait additional time for task to be fully created and page to navigate
+        logger.info("Waiting for task creation to complete and navigation to task detail page...")
+        page.wait_for_timeout(3000)  # Additional wait
+        
+        # Wait for URL to change from task-create to task detail page
+        try:
+            page.wait_for_url(
+                lambda url: "task-create" not in url or "taskId=" in url or "/task/" in url,
+                timeout=10000
+            )
+            logger.info("✓ URL changed after task creation")
+        except Exception as e:
+            logger.warning(f"URL did not change within timeout: {e}")
+        
         current_url = page.url
-        logger.info(f"Current URL: {current_url}")
+        logger.info(f"Current URL after save: {current_url}")
         
-        # Check URL contains task indicator
-        has_task_url = any(indicator in current_url for indicator in ["taskId=", "/task/", "/tasks/"])
+        # Verify we navigated away from task-create page
+        if "task-create" in current_url:
+            logger.error(f"Still on task-create page! Task may not have been created.")
+            logger.error(f"URL: {current_url}")
+            task_page.screenshot("08-task-still-on-create-page")
+            pytest.fail(f"Task creation failed - still on task-create page: {current_url}")
         
-        if has_task_url:
-            logger.info(f"✓ URL indicates task page: {current_url}")
+        # Check URL contains task detail indicators
+        task_detail_indicators = ["taskId=", "/task/", "/tasks/"]
+        has_task_detail_url = any(indicator in current_url for indicator in task_detail_indicators)
+        
+        if has_task_detail_url:
+            logger.info(f"✓ Navigated to task detail page: {current_url}")
         else:
-            logger.warning(f"URL does not clearly indicate task page: {current_url}")
+            logger.warning(f"URL does not clearly indicate task detail page: {current_url}")
             # Still take screenshot for debugging
             task_page.screenshot("08-task-url-verification")
         
@@ -150,11 +191,11 @@ if __name__ == "__main__":
         
         if task_created:
             logger.info(f"✓ Task '{test_task_title}' was created successfully")
+            logger.info(f"✓ Task detail URL: {current_url}")
         else:
-            logger.warning("Could not definitively verify task creation")
-            # We'll assert on URL at least
-            assert has_task_url or "space=" in current_url, \
-                f"Expected task URL but got: {current_url}"
+            logger.error("Could not verify task creation")
+            task_page.screenshot("08-task-creation-failed")
+            pytest.fail(f"Task creation verification failed. URL: {current_url}")
         
         task_page.screenshot("08-task-creation-verified")
         
