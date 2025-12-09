@@ -260,106 +260,197 @@ class TaskPage(BasePage):
         """
         Fill task code in the code editor.
         
+        The code editor section has:
+        - Line numbers on the left (starting with "1")
+        - A dropdown in top right with "Python", "command", "powershell"
+        - The actual code input area
+        
         Args:
             code: Python code or script
         """
         logger.info(f"Filling task code ({len(code)} characters)")
         self.screenshot("before-filling-code")
         
-        # First, try to click on Code tab if it exists
-        try:
-            code_tab = self.page.locator('button:has-text("Code"), [role="tab"]:has-text("Code")')
-            if code_tab.count() > 0 and code_tab.first.is_visible():
-                logger.info("Clicking Code tab")
-                code_tab.first.click()
-                self.page.wait_for_timeout(1000)
-        except Exception as e:
-            logger.debug(f"No Code tab or already on code view: {e}")
-        
-        # Scroll to code editor section first
+        # Step 1: Scroll down to find the code editor section
+        # The code editor is below the "Add Trigger" button
+        logger.info("Scrolling down to find code editor section")
         self.page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
         self.page.wait_for_timeout(1000)
         
-        # Find code editor (often Monaco editor or textarea)
-        code_selectors = [
+        # Step 2: Look for the dropdown with "Python" option (identifies code editor section)
+        logger.info("Looking for code editor section (Python dropdown)")
+        code_section = None
+        
+        # Try to find the dropdown that contains "Python"
+        dropdown_selectors = [
+            'select:has(option:has-text("Python"))',
+            'select:has(option:has-text("python"))',
+            'select:has(option:has-text("command"))',
+            'select:has(option:has-text("powershell"))',
+            'button:has-text("Python")',
+            'div:has-text("Python")',
+            '[role="combobox"]:has-text("Python")',
+        ]
+        
+        for selector in dropdown_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    element = locator.first
+                    if element.is_visible():
+                        code_section = element
+                        logger.info(f"Found code editor section via dropdown: {selector}")
+                        break
+            except Exception as e:
+                logger.debug(f"Dropdown selector {selector} failed: {e}")
+        
+        # Step 3: If dropdown found, scroll to it and find nearby textarea/input
+        if code_section:
+            code_section.scroll_into_view_if_needed()
+            self.page.wait_for_timeout(1000)
+            logger.info("✓ Scrolled to code editor section")
+            self.screenshot("code-section-found")
+        
+        # Step 4: Look for line numbers (indicates code editor)
+        logger.info("Looking for line numbers (code editor indicator)")
+        line_number_selectors = [
+            'text=1',  # First line number
+            '[class*="line-number"]',
+            '[class*="linenumber"]',
+            'span:has-text("1")',
+        ]
+        
+        line_number_element = None
+        for selector in line_number_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    # Find one that's in the lower half of page (code section)
+                    for i in range(locator.count()):
+                        element = locator.nth(i)
+                        box = element.bounding_box()
+                        if box and box['y'] > 400:  # Lower half
+                            line_number_element = element
+                            logger.info(f"Found line number at y={box['y']}")
+                            break
+                    if line_number_element:
+                        break
+            except Exception as e:
+                logger.debug(f"Line number selector {selector} failed: {e}")
+        
+        # Step 5: Find the actual code input (textarea or contenteditable) near the code section
+        logger.info("Finding code input area")
+        code_editor = None
+        
+        # Try multiple strategies to find the code input
+        code_input_selectors = [
+            # Monaco editor
             '.monaco-editor textarea.inputarea',
             'textarea.inputarea',
+            # Generic textarea in code area
+            'textarea',
+            # Contenteditable div (some editors use this)
+            'div[contenteditable="true"]',
+            # Code editor specific
             '.code-editor textarea',
             'textarea[name*="code"]',
             'textarea[placeholder*="code"]',
             'div[class*="monaco"] textarea',
-            '.monaco-editor',
         ]
         
-        code_editor = None
-        for selector in code_selectors:
+        for selector in code_input_selectors:
             try:
                 locator = self.page.locator(selector)
                 count = locator.count()
-                logger.debug(f"Code editor selector '{selector}' found {count} elements")
+                logger.debug(f"Code input selector '{selector}' found {count} elements")
                 
                 if count > 0:
-                    # For Monaco, look for the textarea inside
-                    if 'monaco' in selector.lower():
-                        code_editor = locator.last  # Often the last one
-                    else:
-                        code_editor = locator.first
-                    
-                    if code_editor.is_visible():
-                        logger.info(f"Found code editor with: {selector}")
+                    # Find the one in the lower half of page (code section)
+                    for i in range(count):
+                        element = locator.nth(i)
+                        try:
+                            box = element.bounding_box()
+                            if box and box['y'] > 400:  # Lower half (code section)
+                                code_editor = element
+                                logger.info(f"Found code editor with: {selector} at y={box['y']}")
+                                break
+                        except Exception:
+                            # If bounding box fails, try if visible
+                            if element.is_visible():
+                                code_editor = element
+                                logger.info(f"Found code editor with: {selector} (visible)")
+                                break
+                    if code_editor:
                         break
             except Exception as e:
                 logger.debug(f"Selector {selector} failed: {e}")
         
+        # Step 6: Fallback - find any textarea/input in lower half
         if not code_editor:
-            # Try to find by scrolling to line number "1" and finding nearby textarea
-            logger.warning("Trying fallback: looking for textarea near line numbers")
+            logger.warning("Trying fallback: looking for any textarea in lower half of page")
             try:
-                # Look for any textarea in the lower half of the page
-                all_textareas = self.page.locator('textarea').all()
+                all_textareas = self.page.locator('textarea, div[contenteditable="true"]').all()
+                logger.info(f"Found {len(all_textareas)} total text inputs on page")
+                
                 for ta in all_textareas:
-                    box = ta.bounding_box()
-                    if box and box['y'] > 400 and ta.is_visible():  # Lower half
-                        code_editor = ta
-                        logger.info(f"✓ Found textarea in code section at y={box['y']}")
-                        break
+                    try:
+                        box = ta.bounding_box()
+                        if box and box['y'] > 500:  # Lower part (code section is far down)
+                            if ta.is_visible():
+                                code_editor = ta
+                                logger.info(f"✓ Found code editor at y={box['y']} (fallback)")
+                                break
+                    except Exception:
+                        pass
             except Exception as e:
                 logger.error(f"Fallback failed: {e}")
         
         if not code_editor:
             self.screenshot("code-editor-not-found")
+            # Log page content for debugging
+            try:
+                logger.error("Page HTML snippet (code section):")
+                html = self.page.content()
+                # Find code-related sections
+                if 'python' in html.lower() or 'code' in html.lower():
+                    logger.error(html[html.lower().find('python'):html.lower().find('python')+500])
+            except Exception:
+                pass
             raise Exception("Could not find code editor")
         
-        # Fill code
+        # Step 7: Fill the code
         try:
             # Scroll to code editor
             code_editor.scroll_into_view_if_needed()
-            self.page.wait_for_timeout(500)
+            self.page.wait_for_timeout(1000)
+            logger.info("✓ Scrolled to code editor")
             
-            # For Monaco editor, we need to focus and type
+            # Click to focus
             code_editor.click()
-            self.page.wait_for_timeout(1000)  # Wait for Monaco to initialize
+            self.page.wait_for_timeout(1000)  # Wait for editor to initialize
             
-            # Try to clear existing content first
+            # Clear existing content
             self.page.keyboard.press("Control+A")
             self.page.wait_for_timeout(200)
             self.page.keyboard.press("Delete")
             self.page.wait_for_timeout(500)
             
-            # Type code line by line for Monaco compatibility
+            # Type code line by line
             code_lines = code.split('\n')
+            logger.info(f"Typing {len(code_lines)} lines of code")
+            
             for i, line in enumerate(code_lines):
                 self.page.keyboard.type(line)
                 if i < len(code_lines) - 1:  # Not the last line
                     self.page.keyboard.press("Enter")
-                    self.page.wait_for_timeout(50)  # Small delay between lines
+                    self.page.wait_for_timeout(100)  # Small delay between lines
             
             logger.info(f"✓ Filled code ({len(code_lines)} lines)")
             self.screenshot("after-filling-code")
         except Exception as e:
             logger.error(f"Could not fill code: {e}")
             self.screenshot("code-fill-failed")
-            # Try alternative method
+            # Try alternative: direct fill
             try:
                 logger.warning("Trying alternative: using fill() method")
                 code_editor.fill(code)
