@@ -133,40 +133,48 @@ if __name__ == "__main__":
         # Step 8: Verify task creation
         logger.info("Step 8: Verifying task creation")
         
-        # Wait additional time for task to be fully created and page to navigate
-        logger.info("Waiting for task creation to complete and navigation to task detail page...")
-        page.wait_for_timeout(3000)  # Additional wait
+        # Wait for URL to change from task-create to /tasks/<taskId>
+        logger.info("Waiting for navigation to task detail page (/tasks/<taskId>)...")
         
-        # Wait for URL to change from task-create to task detail page
+        # Wait for URL to match pattern: /tasks/<taskId>?space=Default
         try:
             page.wait_for_url(
-                lambda url: "task-create" not in url or "taskId=" in url or "/task/" in url,
-                timeout=10000
+                lambda url: "/tasks/" in url and "task-create" not in url,
+                timeout=10000  # 10 seconds
             )
-            logger.info("✓ URL changed after task creation")
+            current_url = page.url
+            logger.info(f"✓ URL changed to task detail page: {current_url}")
+            
+            # Extract task ID from URL
+            import re
+            match = re.search(r'/tasks/([^/?]+)', current_url)
+            if match:
+                task_id = match.group(1)
+                logger.info(f"✓ Task created with ID: {task_id}")
         except Exception as e:
             logger.warning(f"URL did not change within timeout: {e}")
-        
-        current_url = page.url
-        logger.info(f"Current URL after save: {current_url}")
-        
-        # Verify we navigated away from task-create page
-        if "task-create" in current_url:
-            logger.error(f"Still on task-create page! Task may not have been created.")
-            logger.error(f"URL: {current_url}")
-            task_page.screenshot("08-task-still-on-create-page")
-            pytest.fail(f"Task creation failed - still on task-create page: {current_url}")
+            current_url = page.url
+            logger.info(f"Current URL: {current_url}")
+            
+            # Verify we navigated away from task-create page
+            if "task-create" in current_url:
+                logger.error(f"Still on task-create page! Task may not have been created.")
+                logger.error(f"URL: {current_url}")
+                task_page.screenshot("08-task-still-on-create-page")
+                pytest.fail(f"Task creation failed - still on task-create page: {current_url}")
         
         # Check URL contains task detail indicators
-        task_detail_indicators = ["taskId=", "/task/", "/tasks/"]
-        has_task_detail_url = any(indicator in current_url for indicator in task_detail_indicators)
-        
-        if has_task_detail_url:
+        if "/tasks/" in current_url:
             logger.info(f"✓ Navigated to task detail page: {current_url}")
         else:
-            logger.warning(f"URL does not clearly indicate task detail page: {current_url}")
-            # Still take screenshot for debugging
-            task_page.screenshot("08-task-url-verification")
+            task_detail_indicators = ["taskId=", "/task/"]
+            has_task_detail_url = any(indicator in current_url for indicator in task_detail_indicators)
+            
+            if has_task_detail_url:
+                logger.info(f"✓ Navigated to task detail page: {current_url}")
+            else:
+                logger.warning(f"URL does not clearly indicate task detail page: {current_url}")
+                task_page.screenshot("08-task-url-verification")
         
         # Verify task was created
         task_created = task_page.verify_task_created(test_task_title)

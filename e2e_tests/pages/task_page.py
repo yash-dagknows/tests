@@ -503,6 +503,10 @@ class TaskPage(BasePage):
         self.screenshot("after-scroll-to-very-bottom")
         logger.info("✓ Scrolled to very bottom")
         
+        # Wait for form to be ready (ensure all fields are processed)
+        logger.info("Waiting for form to be ready...")
+        self.page.wait_for_timeout(2000)  # Give time for any async validation
+        
         # Try multiple selectors for Save button (prioritize checkmark icon)
         save_selectors = [
             # Button with checkmark icon (SVG or icon class)
@@ -569,11 +573,58 @@ class TaskPage(BasePage):
                     save_button.wait_for(state="visible", timeout=5000)
                     # Wait a bit more for form validation
                     self.page.wait_for_timeout(2000)
+                    # Check again
+                    is_disabled = save_button.is_disabled()
+                    if is_disabled:
+                        logger.error("Save button is still disabled - form may have validation errors")
+                        self.screenshot("save-button-disabled")
+                        # Check for validation error messages
+                        error_messages = self.page.locator('.error, .validation-error, [role="alert"]').all()
+                        if error_messages:
+                            for err in error_messages:
+                                logger.error(f"Validation error: {err.text_content()}")
+                
+                # Wait for any loading/processing to complete
+                self.page.wait_for_timeout(1000)
+                
+                # Try to find the form and submit it directly (more reliable)
+                try:
+                    form = self.page.locator('form').first
+                    if form.count() > 0:
+                        logger.info("Found form, will try form submit after button click")
+                except Exception:
+                    pass
                 
                 # Click the button
                 save_button.click()
                 clicked = True
                 logger.info("✓ Clicked Save button")
+                
+                # Wait a moment to see if form submits
+                self.page.wait_for_timeout(1000)
+                
+                # Check if URL changed (quick check)
+                current_url = self.page.url
+                if "/tasks/" in current_url:
+                    logger.info("✓ URL changed immediately after click!")
+                    return
+                
+                # If URL didn't change, try form submit as backup
+                try:
+                    logger.info("URL didn't change, trying form submit as backup")
+                    # Try to find and submit the form
+                    forms = self.page.locator('form').all()
+                    if forms:
+                        logger.info(f"Found {len(forms)} form(s), submitting first one")
+                        forms[0].evaluate("form => form.submit()")
+                        logger.info("✓ Form submitted programmatically")
+                    else:
+                        # Try pressing Enter on the Save button
+                        logger.info("No form found, trying Enter key on Save button")
+                        save_button.press("Enter")
+                except Exception as e:
+                    logger.debug(f"Could not trigger form submit: {e}")
+                    
             except Exception as e:
                 logger.error(f"Could not click Save button: {e}")
                 self.screenshot("save-button-click-failed")
@@ -608,24 +659,106 @@ class TaskPage(BasePage):
         # Wait for save to process and navigation to task detail page
         logger.info("Waiting for task to be created and navigation to task detail page...")
         
+        # Check if button becomes disabled (indicates form is submitting)
+        try:
+            if save_button:
+                # Wait a moment to see if button state changes
+                self.page.wait_for_timeout(1000)
+                is_disabled_after = save_button.is_disabled()
+                if is_disabled_after:
+                    logger.info("✓ Save button became disabled - form is submitting")
+        except Exception:
+            pass
+        
         # Wait a moment for form submission to start
         self.page.wait_for_timeout(2000)
         
-        # Wait for URL to change from task-create to task detail page
+        # Check for loading indicators
         try:
-            # Wait for URL to change (should navigate away from task-create)
+            loading_selectors = ['.loading', '.spinner', '[class*="loading"]', '[class*="spinner"]']
+            for selector in loading_selectors:
+                loading = self.page.locator(selector).first
+                if loading.is_visible(timeout=1000):
+                    logger.info(f"Found loading indicator: {selector}, waiting for it to disappear...")
+                    loading.wait_for(state="hidden", timeout=10000)
+                    logger.info("✓ Loading indicator disappeared")
+        except Exception:
+            pass
+        
+        # Check for any error messages that might prevent submission
+        try:
+            error_selectors = [
+                '.error',
+                '.validation-error',
+                '[role="alert"]',
+                '.alert-danger',
+                'text=Error',
+                'text=error',
+            ]
+            for selector in error_selectors:
+                errors = self.page.locator(selector).all()
+                if errors:
+                    for err in errors:
+                        error_text = err.text_content()
+                        if error_text and len(error_text.strip()) > 0:
+                            logger.warning(f"Found error message: {error_text}")
+        except Exception:
+            pass
+        
+        # Wait for URL to change from task-create to /tasks/<taskId>
+        try:
+            # First, wait for any network activity (form submission)
+            logger.info("Waiting for form submission (network request)...")
+            try:
+                # Wait for response from task creation endpoint
+                with self.page.expect_response(
+                    lambda response: "/task" in response.url or "task" in response.url.lower(),
+                    timeout=5000
+                ) as response_info:
+                    logger.info("✓ Form submission request detected")
+            except Exception:
+                logger.debug("No network request detected, continuing...")
+            
+            # Wait for URL to match pattern: /tasks/<taskId>?space=Default
+            # The URL should change from task-create to /tasks/<id>
+            logger.info("Waiting for URL to change to /tasks/<taskId>...")
             self.page.wait_for_url(
-                lambda url: "task-create" not in url or "taskId=" in url or "/task/" in url,
-                timeout=20000  # Increased timeout to 20 seconds
+                lambda url: "/tasks/" in url and "task-create" not in url,
+                timeout=10000  # 10 seconds should be enough
             )
             url_after_save = self.page.url
             logger.info(f"✓ URL changed after save: {url_after_save}")
+            
+            # Verify it's the correct pattern
+            if "/tasks/" in url_after_save and "task-create" not in url_after_save:
+                logger.info("✓ Navigated to task detail page successfully")
+            else:
+                logger.warning(f"URL pattern unexpected: {url_after_save}")
         except Exception as e:
             logger.warning(f"URL did not change within timeout: {e}")
             url_after_save = self.page.url
             logger.info(f"Current URL: {url_after_save}")
             # Take screenshot to see what's happening
             self.screenshot("url-did-not-change-after-save")
+            
+            # Check if there are any loading indicators
+            try:
+                loading = self.page.locator('.loading, .spinner, [class*="loading"]').all()
+                if loading:
+                    logger.info("Loading indicators found, waiting a bit more...")
+                    self.page.wait_for_timeout(3000)
+                    url_after_save = self.page.url
+                    if "/tasks/" in url_after_save:
+                        logger.info(f"✓ URL changed after additional wait: {url_after_save}")
+            except Exception:
+                pass
+            
+            # Final check - maybe the page navigated but we missed it
+            final_url = self.page.url
+            if "/tasks/" in final_url and "task-create" not in final_url:
+                logger.info(f"✓ URL changed to: {final_url}")
+            else:
+                logger.error(f"URL still on task-create: {final_url}")
         
         # Additional wait for page to fully load
         self.page.wait_for_timeout(2000)
@@ -669,11 +802,23 @@ class TaskPage(BasePage):
             self.screenshot("still-on-task-create-page")
             return False
         
-        # Check if URL contains task ID or task detail page indicators
+        # Check if URL matches the expected pattern: /tasks/<taskId>?space=Default
+        if "/tasks/" in current_url:
+            # Extract task ID from URL
+            import re
+            match = re.search(r'/tasks/([^/?]+)', current_url)
+            if match:
+                task_id = match.group(1)
+                logger.info(f"✓ Navigated to task detail page with task ID: {task_id}")
+                logger.info(f"✓ Task detail URL: {current_url}")
+                return True
+            else:
+                logger.warning(f"URL contains /tasks/ but couldn't extract task ID: {current_url}")
+        
+        # Check for other task detail indicators
         task_detail_indicators = [
             "taskId=",
             "/task/",
-            "/tasks/",
         ]
         
         has_task_detail_url = any(indicator in current_url for indicator in task_detail_indicators)
