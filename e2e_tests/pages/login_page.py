@@ -253,5 +253,44 @@ class LoginPage(BasePage):
         Returns:
             True if logged in, False otherwise
         """
-        return self.is_visible(self.SIGNED_IN_USER_ICON, timeout=2000)
+        logger.info("Checking if user is logged in...")
+        
+        # Wait for any redirects to complete
+        # After login, URL goes to /vLoginRedirect then to final destination
+        try:
+            # Wait for redirect to complete (URL should not be vlogin or vLoginRedirect)
+            for _ in range(10):  # Max 10 seconds
+                current_url = self.page.url.lower()
+                if "vlogin" not in current_url and "loginredirect" not in current_url:
+                    break
+                self.page.wait_for_timeout(1000)
+            
+            logger.info(f"Current URL after redirect: {self.page.url}")
+        except Exception as e:
+            logger.warning(f"Error waiting for redirect: {e}")
+        
+        # Check multiple indicators of being logged in
+        logged_in_indicators = [
+            self.SIGNED_IN_USER_ICON,
+            '#signed_in_user_icon',
+            '[data-testid="user-menu"]',
+            'button:has-text("Logout")',
+            'a:has-text("Logout")',
+            'text=Sign out',
+        ]
+        
+        for indicator in logged_in_indicators:
+            if self.is_visible(indicator, timeout=3000):
+                logger.info(f"✓ User is logged in (found: {indicator})")
+                return True
+        
+        # Fallback: Check if URL is NOT login page
+        current_url = self.page.url.lower()
+        if "/vlogin" not in current_url and "/login" not in current_url:
+            logger.info("✓ User appears logged in (not on login page)")
+            return True
+        
+        logger.warning("✗ User does not appear to be logged in")
+        logger.warning(f"Current URL: {self.page.url}")
+        return False
 
