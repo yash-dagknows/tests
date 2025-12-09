@@ -1,0 +1,55 @@
+{
+  "event": {
+    "id": "event-svc-54321",
+    "event_type": "incident.triggered",
+    "occurred_at": "1765204000",
+    "data": {
+      "id": "incident-svc-98765",
+      "incident_key": "Production Service Down",
+      "type": "incident",
+      "summary": "Production Service Down",
+      "description": "Production API service (api.company.com) is not responding to health checks. Service has been unavailable for 3 minutes. All endpoints returning 503 errors.",
+      "urgency": "high",
+      "status": "triggered",
+      "service": {
+        "id": "service-api-prod",
+        "name": "Production API",
+        "summary": "Production API Service"
+      },
+      "priority": {
+        "id": "priority-p1",
+        "name": "P1",
+        "summary": "Critical - Immediate Response Required"
+      },
+      "created_at": "1765204000",
+      "updated_at": "1765204000",
+      "html_url": "https://company.pagerduty.com/incidents/INC98765",
+      "incident_number": 98765,
+      "teams": [
+        {
+          "id": "team-sre",
+          "name": "SRE Team",
+          "summary": "Site Reliability Engineering"
+        }
+      ],
+      "impacted_services": [
+        {
+          "id": "service-api",
+          "name": "API Service",
+          "summary": "Main API Service"
+        },
+        {
+          "id": "service-web",
+          "name": "Web Frontend",
+          "summary": "Web Application Frontend"
+        }
+      ],
+      "escalation_policy": {
+        "id": "policy-prod",
+        "name": "Production Escalation",
+        "summary": "Production On-Call Escalation"
+      }
+    }
+  }
+}
+

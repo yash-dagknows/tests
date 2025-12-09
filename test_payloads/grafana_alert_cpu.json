@@ -1,0 +1,49 @@
+{
+  "receiver": "DagKnows_Alert_Endpoint",
+  "status": "firing",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "HighCPUUsage",
+        "grafana_folder": "production",
+        "instance": "server-01",
+        "job": "node-exporter",
+        "severity": "critical"
+      },
+      "annotations": {
+        "description": "CPU usage has exceeded 90% for the last 5 minutes on server-01. Application performance is degraded.",
+        "summary": "High CPU Usage Detected"
+      },
+      "startsAt": "1765204000",
+      "endsAt": "0",
+      "generatorURL": "http://grafana:3000/alerting/grafana/abc123/view",
+      "fingerprint": "cpu_alert_12345",
+      "values": {
+        "A": 95.5
+      },
+      "valueString": "[var='A' labels={instance=server-01, job=node-exporter} value=95.5]"
+    }
+  ],
+  "groupLabels": {
+    "alertname": "HighCPUUsage",
+    "grafana_folder": "production"
+  },
+  "commonLabels": {
+    "alertname": "HighCPUUsage",
+    "grafana_folder": "production",
+    "instance": "server-01",
+    "job": "node-exporter",
+    "severity": "critical"
+  },
+  "commonAnnotations": {
+    "description": "CPU usage has exceeded 90% for the last 5 minutes on server-01. Application performance is degraded.",
+    "summary": "High CPU Usage Detected"
+  },
+  "externalURL": "http://grafana:3000/",
+  "version": "1",
+  "title": "[FIRING:1] HighCPUUsage production (server-01 node-exporter)",
+  "state": "alerting",
+  "message": "**Firing**\n\nValue: A=95.5\nLabels:\n - alertname = HighCPUUsage\n - instance = server-01\n - severity = critical"
+}
+

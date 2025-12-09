@@ -1,0 +1,49 @@
+{
+  "receiver": "DagKnows_Alert_Endpoint",
+  "status": "firing",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "HighMemoryUsage",
+        "grafana_folder": "production",
+        "instance": "server-02",
+        "job": "node-exporter",
+        "severity": "warning"
+      },
+      "annotations": {
+        "description": "Memory usage has exceeded 85% on server-02. Potential memory leak detected.",
+        "summary": "High Memory Usage Alert"
+      },
+      "startsAt": "1765204000",
+      "endsAt": "0",
+      "generatorURL": "http://grafana:3000/alerting/grafana/mem456/view",
+      "fingerprint": "mem_alert_67890",
+      "values": {
+        "A": 87.3
+      },
+      "valueString": "[var='A' labels={instance=server-02, job=node-exporter} value=87.3]"
+    }
+  ],
+  "groupLabels": {
+    "alertname": "HighMemoryUsage",
+    "grafana_folder": "production"
+  },
+  "commonLabels": {
+    "alertname": "HighMemoryUsage",
+    "grafana_folder": "production",
+    "instance": "server-02",
+    "job": "node-exporter",
+    "severity": "warning"
+  },
+  "commonAnnotations": {
+    "description": "Memory usage has exceeded 85% on server-02. Potential memory leak detected.",
+    "summary": "High Memory Usage Alert"
+  },
+  "externalURL": "http://grafana:3000/",
+  "version": "1",
+  "title": "[FIRING:1] HighMemoryUsage production (server-02 node-exporter)",
+  "state": "alerting",
+  "message": "**Firing**\n\nValue: A=87.3\nLabels:\n - alertname = HighMemoryUsage\n - instance = server-02\n - severity = warning"
+}
+

@@ -1,0 +1,31 @@
+# E2E Test Suite Dependencies
+
+# Core Testing Frameworks
+pytest==7.4.3
+pytest-playwright==0.4.4
+playwright==1.40.0
+pytest-asyncio==0.21.1
+
+# API Testing
+requests==2.31.0
+urllib3==2.1.0
+
+# Test Reporting
+pytest-html==4.1.1
+allure-pytest==2.13.2
+pytest-json-report==1.5.0
+
+# Utilities
+python-dotenv==1.0.0
+faker==22.0.0
+pydantic==2.5.3
+
+# JWT handling
+PyJWT==2.8.0
+
+# Date/Time
+python-dateutil==2.8.2
+
+# Logging
+colorlog==6.8.0
+

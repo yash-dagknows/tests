@@ -1,0 +1,45 @@
+{
+  "event": {
+    "id": "event-db-12345",
+    "event_type": "incident.triggered",
+    "occurred_at": "1765204000",
+    "data": {
+      "id": "incident-db-67890",
+      "incident_key": "Database Connection Failure",
+      "type": "incident",
+      "summary": "Database Connection Failure",
+      "description": "Production database at db-prod-01.company.com is unreachable. Connection attempts timing out after 30 seconds. Application is unable to serve requests.",
+      "urgency": "high",
+      "status": "triggered",
+      "service": {
+        "id": "service-db-prod",
+        "name": "Production Database",
+        "summary": "Production PostgreSQL Database"
+      },
+      "priority": {
+        "id": "priority-p1",
+        "name": "P1",
+        "summary": "Critical - Immediate Response Required"
+      },
+      "created_at": "1765204000",
+      "updated_at": "1765204000",
+      "html_url": "https://company.pagerduty.com/incidents/INC12345",
+      "incident_number": 12345,
+      "teams": [
+        {
+          "id": "team-backend",
+          "name": "Backend Team",
+          "summary": "Backend Infrastructure Team"
+        }
+      ],
+      "impacted_services": [
+        {
+          "id": "service-api",
+          "name": "API Service",
+          "summary": "Main API Service"
+        }
+      ]
+    }
+  }
+}
+
