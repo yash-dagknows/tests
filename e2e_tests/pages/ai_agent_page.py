@@ -34,46 +34,129 @@ class AIAgentPage(BasePage):
         super().__init__(page)
     
     def click_new_task_button(self) -> None:
-        """Click the 'New Task' button to open dropdown."""
+        """Click the 'New Task' button (blue button on top right) to open dropdown."""
         logger.info("Clicking 'New Task' button")
         
-        # Wait for button to be visible
-        self.page.get_by_role("button", name="New Task").wait_for(state="visible", timeout=10000)
+        # Take screenshot before clicking
+        self.screenshot("before-new-task-click")
         
-        # Click button
-        self.page.get_by_role("button", name="New Task").click()
+        # Wait for page to be ready
+        self.page.wait_for_load_state("networkidle", timeout=10000)
+        
+        # Try multiple selector strategies for the "New Task" button
+        button_selectors = [
+            'button:has-text("New Task")',  # Button with text
+            'button:has-text("+ New Task")',  # Button with + prefix
+            '[class*="btn"]:has-text("New Task")',  # Button with btn class
+            'button.btn-primary:has-text("New Task")',  # Primary button
+        ]
+        
+        clicked = False
+        for selector in button_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    logger.info(f"Found New Task button with: {selector}")
+                    locator.first.wait_for(state="visible", timeout=5000)
+                    locator.first.click()
+                    clicked = True
+                    logger.info("✓ Clicked New Task button")
+                    break
+            except Exception as e:
+                logger.debug(f"Selector '{selector}' failed: {e}")
+        
+        if not clicked:
+            self.screenshot("new-task-button-not-found")
+            raise Exception("Could not find New Task button")
         
         # Wait for dropdown to appear
-        self.page.wait_for_timeout(1000)
+        self.page.wait_for_timeout(1500)
+        
+        # Take screenshot of dropdown
+        self.screenshot("new-task-dropdown-open")
         logger.info("✓ New Task dropdown opened")
     
     def click_create_with_ai_agent(self) -> None:
-        """Click 'Create with AI Agent' from dropdown."""
-        logger.info("Clicking 'Create with AI Agent'")
+        """Click 'Create with AI Agent' from the New Task dropdown menu."""
+        logger.info("Clicking 'Create with AI Agent' from dropdown")
         
-        # Find and click the option
-        # Try different possible selectors
+        # Take screenshot of dropdown before clicking
+        self.screenshot("dropdown-before-click")
+        
+        # Wait a bit for dropdown animation to complete
+        self.page.wait_for_timeout(500)
+        
+        # Try different possible selectors for the dropdown option
+        # Based on the screenshot, the dropdown shows:
+        # - Create from Form
+        # - Import from Document  
+        # - Create with AI Agent
         selectors = [
-            'text=Create with AI Agent',
-            '[role="menuitem"]:has-text("Create with AI Agent")',
-            'button:has-text("Create with AI Agent")',
-            'a:has-text("Create with AI Agent")'
+            'text=Create with AI Agent',  # Exact text match
+            ':text("Create with AI Agent")',  # Case insensitive
+            '[role="menuitem"]:has-text("Create with AI Agent")',  # Menu item role
+            'button:has-text("Create with AI Agent")',  # If it's a button
+            'a:has-text("Create with AI Agent")',  # If it's a link
+            'div:has-text("Create with AI Agent")',  # If it's a div
+            '[class*="menu"] :has-text("Create with AI Agent")',  # Inside menu
+            ':text("AI Agent")',  # Partial match as fallback
         ]
         
         clicked = False
         for selector in selectors:
-            if self.page.locator(selector).count() > 0:
-                self.page.locator(selector).first.click()
-                clicked = True
-                break
+            try:
+                locator = self.page.locator(selector)
+                count = locator.count()
+                if count > 0:
+                    logger.info(f"Found 'Create with AI Agent' with selector: {selector} (count: {count})")
+                    
+                    # Wait for it to be visible
+                    locator.first.wait_for(state="visible", timeout=3000)
+                    
+                    # Scroll into view if needed
+                    locator.first.scroll_into_view_if_needed()
+                    
+                    # Click it
+                    locator.first.click()
+                    
+                    clicked = True
+                    logger.info("✓ Clicked 'Create with AI Agent'")
+                    break
+            except Exception as e:
+                logger.debug(f"Selector '{selector}' failed: {e}")
         
         if not clicked:
-            logger.warning("Could not find 'Create with AI Agent' option")
-            # Take screenshot for debugging
+            logger.error("Could not find 'Create with AI Agent' option in dropdown")
             self.screenshot("create-with-ai-agent-not-found")
+            
+            # Log all visible text for debugging
+            try:
+                all_text = self.page.inner_text('body')
+                logger.error(f"Page contains: {all_text[:500]}")
+            except Exception:
+                pass
+            
+            raise Exception("Could not find 'Create with AI Agent' option")
         
-        # Wait for navigation to agent page
-        self.page.wait_for_load_state("networkidle", timeout=10000)
+        # Wait for navigation to AI agent page
+        self.page.wait_for_timeout(2000)
+        
+        # Wait for network idle
+        try:
+            self.page.wait_for_load_state("networkidle", timeout=10000)
+        except Exception as e:
+            logger.warning(f"Network idle timeout: {e}")
+        
+        # Take screenshot after navigation
+        self.screenshot("after-ai-agent-navigation")
+        
+        # Verify URL contains agent=1
+        current_url = self.page.url
+        logger.info(f"Current URL after clicking: {current_url}")
+        
+        if "agent=1" not in current_url:
+            logger.warning("URL does not contain 'agent=1' - might not be on AI Agent page")
+        
         logger.info("✓ Navigated to AI Agent page")
     
     def navigate_to_ai_agent_directly(self, workspace: str = "") -> None:
