@@ -59,9 +59,26 @@ class LoginPage(BasePage):
             self.page.locator(self.ORG_INPUT).fill(org)
     
     def click_sign_in(self) -> None:
-        """Click sign in button."""
+        """Click sign in button (the main visible button in the middle of the page)."""
         logger.info("Clicking sign in button")
-        self.page.get_by_role("button", name="Sign in").click()
+        # There are multiple "Sign in" buttons on the page:
+        # 1. <button class="btn btn-primary"> - the main visible button (we want this one)
+        # 2. <input type="button"> - secondary/hidden button
+        # Target the main button specifically using its CSS class
+        try:
+            # First try the primary button (the visible one in the middle)
+            self.page.locator('button.btn-primary:has-text("Sign in")').click()
+            logger.info("✓ Clicked main Sign in button")
+        except Exception as e:
+            logger.warning(f"Could not click btn-primary button, trying alternatives: {e}")
+            # Fallback: try any button with "Sign in" text
+            try:
+                self.page.locator('button:has-text("Sign in")').first.click()
+                logger.info("✓ Clicked Sign in button (fallback)")
+            except Exception:
+                # Last resort: try the input button
+                self.page.locator('input[type="button"][value="Sign in"]').click()
+                logger.info("✓ Clicked input Sign in button (last resort)")
     
     def wait_for_login_success(self, timeout: int = 10000) -> None:
         """
