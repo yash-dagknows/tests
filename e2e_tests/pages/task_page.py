@@ -132,33 +132,76 @@ class TaskPage(BasePage):
         logger.info(f"Filling task title: {title}")
         self.screenshot("before-filling-title")
         
-        # Find title input
+        # Wait a bit for form to fully load
+        self.page.wait_for_timeout(2000)
+        
+        # Find title input - it's the first input/textarea at the top
         title_selectors = [
+            'textarea[placeholder="Title"]',
             'input[placeholder="Title"]',
+            'textarea',  # Often the first textarea is the title
             'input[name="title"]',
             'input[type="text"]',
+            '.title-input',
+            '[data-testid="title"]',
         ]
         
         title_input = None
         for selector in title_selectors:
-            locator = self.page.locator(selector)
-            if locator.count() > 0:
-                # Find the first visible one
-                for i in range(locator.count()):
-                    element = locator.nth(i)
-                    if element.is_visible():
-                        title_input = element
-                        logger.info(f"Found title input with: {selector}")
+            try:
+                locator = self.page.locator(selector)
+                count = locator.count()
+                logger.debug(f"Selector '{selector}' found {count} elements")
+                
+                if count > 0:
+                    # Find the first visible one
+                    for i in range(count):
+                        element = locator.nth(i)
+                        if element.is_visible():
+                            # Verify it's near the top of the page (likely the title field)
+                            box = element.bounding_box()
+                            if box and box['y'] < 400:  # Top 400px of page
+                                title_input = element
+                                logger.info(f"Found title input with: {selector} at position y={box['y']}")
+                                break
+                    if title_input:
                         break
-                if title_input:
-                    break
+            except Exception as e:
+                logger.debug(f"Error with selector {selector}: {e}")
+        
+        if not title_input:
+            # Last resort: try to find the first visible input/textarea on the page
+            logger.warning("Trying fallback: first visible textarea or input")
+            try:
+                all_inputs = self.page.locator('textarea, input[type="text"]').all()
+                logger.info(f"Found {len(all_inputs)} total text inputs on page")
+                
+                for inp in all_inputs:
+                    if inp.is_visible():
+                        box = inp.bounding_box()
+                        if box:
+                            logger.info(f"Found input at y={box['y']}")
+                            if box['y'] < 400:  # Top of page
+                                title_input = inp
+                                logger.info(f"✓ Using first visible input at top of page")
+                                break
+            except Exception as e:
+                logger.error(f"Fallback failed: {e}")
         
         if not title_input:
             self.screenshot("title-input-not-found")
+            # Log page content for debugging
+            try:
+                logger.error("Page HTML snippet:")
+                logger.error(self.page.content()[:3000])
+            except Exception:
+                pass
             raise Exception("Could not find title input field")
         
         # Fill title
+        title_input.scroll_into_view_if_needed()
         title_input.click()
+        self.page.wait_for_timeout(500)
         title_input.fill(title)
         logger.info(f"✓ Filled title: {title}")
         self.screenshot("after-filling-title")
@@ -233,6 +276,10 @@ class TaskPage(BasePage):
         except Exception as e:
             logger.debug(f"No Code tab or already on code view: {e}")
         
+        # Scroll to code editor section first
+        self.page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+        self.page.wait_for_timeout(1000)
+        
         # Find code editor (often Monaco editor or textarea)
         code_selectors = [
             '.monaco-editor textarea.inputarea',
@@ -240,16 +287,44 @@ class TaskPage(BasePage):
             '.code-editor textarea',
             'textarea[name*="code"]',
             'textarea[placeholder*="code"]',
+            'div[class*="monaco"] textarea',
             '.monaco-editor',
         ]
         
         code_editor = None
         for selector in code_selectors:
-            locator = self.page.locator(selector)
-            if locator.count() > 0:
-                code_editor = locator.first
-                logger.info(f"Found code editor with: {selector}")
-                break
+            try:
+                locator = self.page.locator(selector)
+                count = locator.count()
+                logger.debug(f"Code editor selector '{selector}' found {count} elements")
+                
+                if count > 0:
+                    # For Monaco, look for the textarea inside
+                    if 'monaco' in selector.lower():
+                        code_editor = locator.last  # Often the last one
+                    else:
+                        code_editor = locator.first
+                    
+                    if code_editor.is_visible():
+                        logger.info(f"Found code editor with: {selector}")
+                        break
+            except Exception as e:
+                logger.debug(f"Selector {selector} failed: {e}")
+        
+        if not code_editor:
+            # Try to find by scrolling to line number "1" and finding nearby textarea
+            logger.warning("Trying fallback: looking for textarea near line numbers")
+            try:
+                # Look for any textarea in the lower half of the page
+                all_textareas = self.page.locator('textarea').all()
+                for ta in all_textareas:
+                    box = ta.bounding_box()
+                    if box and box['y'] > 400 and ta.is_visible():  # Lower half
+                        code_editor = ta
+                        logger.info(f"✓ Found textarea in code section at y={box['y']}")
+                        break
+            except Exception as e:
+                logger.error(f"Fallback failed: {e}")
         
         if not code_editor:
             self.screenshot("code-editor-not-found")
@@ -257,30 +332,55 @@ class TaskPage(BasePage):
         
         # Fill code
         try:
+            # Scroll to code editor
+            code_editor.scroll_into_view_if_needed()
+            self.page.wait_for_timeout(500)
+            
             # For Monaco editor, we need to focus and type
             code_editor.click()
-            self.page.wait_for_timeout(500)
+            self.page.wait_for_timeout(1000)  # Wait for Monaco to initialize
             
             # Try to clear existing content first
             self.page.keyboard.press("Control+A")
+            self.page.wait_for_timeout(200)
             self.page.keyboard.press("Delete")
-            self.page.wait_for_timeout(300)
+            self.page.wait_for_timeout(500)
             
-            # Type code
-            code_editor.fill(code)
-            logger.info(f"✓ Filled code")
+            # Type code line by line for Monaco compatibility
+            code_lines = code.split('\n')
+            for i, line in enumerate(code_lines):
+                self.page.keyboard.type(line)
+                if i < len(code_lines) - 1:  # Not the last line
+                    self.page.keyboard.press("Enter")
+                    self.page.wait_for_timeout(50)  # Small delay between lines
+            
+            logger.info(f"✓ Filled code ({len(code_lines)} lines)")
             self.screenshot("after-filling-code")
         except Exception as e:
             logger.error(f"Could not fill code: {e}")
             self.screenshot("code-fill-failed")
-            raise
+            # Try alternative method
+            try:
+                logger.warning("Trying alternative: using fill() method")
+                code_editor.fill(code)
+                logger.info("✓ Code filled using fill() method")
+            except Exception as e2:
+                logger.error(f"Alternative also failed: {e2}")
+                raise
     
     def scroll_to_bottom(self) -> None:
         """Scroll to bottom of page to find Save button."""
         logger.info("Scrolling to bottom of page")
         try:
-            self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            # Scroll to bottom multiple times to ensure we reach the very bottom
+            for i in range(3):
+                self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                self.page.wait_for_timeout(500)
+            
+            # Also try scrolling by a large pixel amount
+            self.page.evaluate("window.scrollBy(0, 5000)")
             self.page.wait_for_timeout(1000)
+            
             logger.info("✓ Scrolled to bottom")
             self.screenshot("after-scroll-to-bottom")
         except Exception as e:
