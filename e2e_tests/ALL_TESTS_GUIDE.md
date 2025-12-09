@@ -37,7 +37,21 @@
 **What it tests:**
 - Settings → Workspaces tab
 - Create workspace → Verify in list
-- Navigate via folder icon dropdown
+- Navigate directly via URL
+
+---
+
+### **4. Task CRUD Test** 📝
+**Test:** Create task using form-based interface  
+**File:** `ui_tests/test_task_crud.py`  
+**Duration:** 60-80 seconds  
+**Runner:** `./run_task_crud_test.sh`
+
+**What it tests:**
+- Click "New Task" → "Create from Form"
+- Fill title, description, code
+- Scroll and click Save
+- Verify task creation
 
 ---
 
@@ -71,6 +85,9 @@ pytest ui_tests/ -v
 
 # Workspace Creation Test
 ./run_workspace_test.sh
+
+# Task CRUD Test
+./run_task_crud_test.sh
 ```
 
 ### **With Browser Visible (Headed Mode):**
@@ -98,6 +115,7 @@ pytest ui_tests/ -v
 | **AI-Selected** | 70s | Yes (alert) | No | Test AI task selection |
 | **Autonomous** | 120-180s | Yes (alert) | No | Test AI task creation |
 | **Workspace** | 60-90s | Minimal | No | Test workspace management |
+| **Task CRUD** | 60-80s | Minimal | No | Test task form creation |
 
 ---
 
@@ -415,14 +433,15 @@ rm -rf .pytest_cache/
 
 ## ✅ Summary
 
-### **Total Tests Created:** 6
+### **Total Tests Created:** 9
 - AI Agent Workflow (3 variants)
 - Alert Handling (3 modes)
 - Workspace Creation (1)
+- Task CRUD (2 tests)
 
-### **Total Duration:** ~8-10 minutes for all
+### **Total Duration:** ~10-12 minutes for all
 
-### **Total Screenshots:** ~40-50 per full run
+### **Total Screenshots:** ~50-60 per full run
 
 ### **Ready to Run:**
 ```bash
