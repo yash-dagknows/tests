@@ -154,24 +154,45 @@ class SettingsPage(BasePage):
         # Take screenshot before selection
         self.screenshot("before-deterministic-selection")
         
-        # Wait for Incident Response section to be visible
+        # First, scroll down to make sure Incident Response section is visible
+        # The section might be below the fold
+        logger.info("Scrolling down to Incident Response section...")
         try:
-            self.page.locator('text=Incident Response').wait_for(
-                state="visible", 
-                timeout=10000
-            )
-            logger.info("✓ Incident Response section found")
+            # Try to find "Enable Incident Response" toggle which is above the modes
+            enable_toggle = self.page.locator('text=Enable Incident Response')
+            if enable_toggle.count() > 0:
+                logger.info("Found 'Enable Incident Response' - scrolling to it")
+                enable_toggle.first.scroll_into_view_if_needed()
+                self.page.wait_for_timeout(1000)
         except Exception as e:
-            logger.error(f"Incident Response section not found: {e}")
-            self.screenshot("incident-response-not-found")
-            raise
+            logger.debug(f"Could not scroll to Enable Incident Response: {e}")
         
-        # Try multiple strategies to select Deterministic mode
+        # Take screenshot after scrolling
+        self.screenshot("after-scroll-to-incident-response")
+        
+        # Now look for the Incident Response section heading (use .first to avoid strict mode violation)
+        try:
+            # There are multiple "Incident Response" texts, use the heading one
+            incident_heading = self.page.locator('text=Incident Response').first
+            incident_heading.scroll_into_view_if_needed()
+            logger.info("✓ Incident Response section visible")
+        except Exception as e:
+            logger.warning(f"Could not find Incident Response heading: {e}")
+        
+        # Wait a moment for the section to be fully visible
+        self.page.wait_for_timeout(1000)
+        
+        # Take screenshot showing the Incident Response section
+        self.screenshot("incident-response-section-visible")
+        
+        # Now try to find and click Deterministic mode
+        # Look for the Deterministic option with "Always Active" badge
         deterministic_selectors = [
-            'text=Deterministic',  # Text match
-            '[value="deterministic"]',  # Radio button value
-            'input[type="radio"] + label:has-text("Deterministic")',  # Label next to radio
+            'text=Deterministic',  # Text match (will find all, we'll use .first)
             ':text("Deterministic")',  # Case insensitive
+            '[role="radio"]:has-text("Deterministic")',  # Radio button with text
+            'button:has-text("Deterministic")',  # If it's a button
+            'div:has-text("Deterministic") >> visible=true',  # Visible div
         ]
         
         selected = False
@@ -182,10 +203,16 @@ class SettingsPage(BasePage):
                 if count > 0:
                     logger.info(f"Found Deterministic option with: {selector} (count: {count})")
                     
-                    # Click the first match
+                    # Scroll to and click the first visible match
                     element = locator.first
                     element.scroll_into_view_if_needed()
+                    self.page.wait_for_timeout(500)
                     element.wait_for(state="visible", timeout=5000)
+                    
+                    # Take screenshot before clicking
+                    self.screenshot("before-clicking-deterministic")
+                    
+                    # Click it
                     element.click()
                     
                     selected = True
@@ -195,11 +222,21 @@ class SettingsPage(BasePage):
                 logger.debug(f"Selector '{selector}' failed: {e}")
         
         if not selected:
+            logger.error("Could not find Deterministic mode option")
             self.screenshot("deterministic-not-found")
+            # Try to log what's visible
+            try:
+                page_text = self.page.inner_text('body')
+                if "Deterministic" in page_text:
+                    logger.error("'Deterministic' text IS present on page")
+                else:
+                    logger.error("'Deterministic' text NOT found on page")
+            except Exception:
+                pass
             raise Exception("Could not find or click Deterministic mode option")
         
         # Wait for selection to register
-        self.page.wait_for_timeout(1000)
+        self.page.wait_for_timeout(2000)
         
         # Take screenshot after selection
         self.screenshot("after-deterministic-selection")
@@ -211,6 +248,15 @@ class SettingsPage(BasePage):
         
         self.screenshot("before-ai-selected-selection")
         
+        # Scroll to Incident Response section
+        try:
+            enable_toggle = self.page.locator('text=Enable Incident Response')
+            if enable_toggle.count() > 0:
+                enable_toggle.first.scroll_into_view_if_needed()
+                self.page.wait_for_timeout(1000)
+        except Exception:
+            pass
+        
         ai_selected_selectors = [
             'text=AI-Selected',
             '[value="ai_selected"]',
@@ -221,14 +267,17 @@ class SettingsPage(BasePage):
             try:
                 locator = self.page.locator(selector)
                 if locator.count() > 0:
+                    locator.first.scroll_into_view_if_needed()
+                    locator.first.wait_for(state="visible", timeout=5000)
                     locator.first.click()
                     logger.info("✓ AI-Selected mode selected")
-                    self.page.wait_for_timeout(1000)
+                    self.page.wait_for_timeout(2000)
                     self.screenshot("after-ai-selected-selection")
                     return
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Selector '{selector}' failed: {e}")
         
+        self.screenshot("ai-selected-not-found")
         raise Exception("Could not select AI-Selected mode")
     
     def select_autonomous_mode(self) -> None:
@@ -236,6 +285,15 @@ class SettingsPage(BasePage):
         logger.info("Selecting Autonomous mode")
         
         self.screenshot("before-autonomous-selection")
+        
+        # Scroll to Incident Response section
+        try:
+            enable_toggle = self.page.locator('text=Enable Incident Response')
+            if enable_toggle.count() > 0:
+                enable_toggle.first.scroll_into_view_if_needed()
+                self.page.wait_for_timeout(1000)
+        except Exception:
+            pass
         
         autonomous_selectors = [
             'text=Autonomous',
@@ -247,14 +305,17 @@ class SettingsPage(BasePage):
             try:
                 locator = self.page.locator(selector)
                 if locator.count() > 0:
+                    locator.first.scroll_into_view_if_needed()
+                    locator.first.wait_for(state="visible", timeout=5000)
                     locator.first.click()
                     logger.info("✓ Autonomous mode selected")
-                    self.page.wait_for_timeout(1000)
+                    self.page.wait_for_timeout(2000)
                     self.screenshot("after-autonomous-selection")
                     return
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Selector '{selector}' failed: {e}")
         
+        self.screenshot("autonomous-not-found")
         raise Exception("Could not select Autonomous mode")
     
     def verify_mode_selected(self, mode: str) -> bool:
