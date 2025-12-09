@@ -5,6 +5,12 @@ __pycache__/
 *.so
 .Python
 
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
 # Test artifacts
 .pytest_cache/
 .coverage

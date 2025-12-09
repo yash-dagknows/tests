@@ -9,9 +9,16 @@ Copy and paste these commands to run your first test in 2 minutes!
 ```bash
 cd /Users/yashyaadav/dag_workspace/dagknows_src/tests/e2e_tests
 
-# Install (first time only)
+# Create and activate virtual environment (first time only)
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies (first time only)
 pip install -r requirements.txt
 playwright install chromium
+
+# Run setup script (creates required files)
+./setup.sh
 
 # Setup (already pre-configured!)
 cp env.template .env
@@ -19,6 +26,8 @@ cp env.template .env
 # Run test with visible browser
 ./run_ai_agent_test.sh --headed
 ```
+
+**Note:** Always activate venv: `source venv/bin/activate`
 
 **✅ That's it! Watch the browser automate your workflow!**
 
@@ -42,9 +51,16 @@ docker-compose -f local-docker-c-backup-bfr-reorder.yml up -d
 ```bash
 cd /Users/yashyaadav/dag_workspace/dagknows_src/tests/e2e_tests
 
-# Install (first time only)
+# Create and activate virtual environment (first time only)
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies (first time only)
 pip install -r requirements.txt
 playwright install chromium
+
+# Run setup script (creates required files)
+./setup.sh
 
 # Setup
 cp env.template .env

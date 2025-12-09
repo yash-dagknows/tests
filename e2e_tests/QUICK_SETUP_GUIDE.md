@@ -23,8 +23,14 @@ cd /Users/yashyaadav/dag_workspace/dagknows_src
 cd tests/e2e_tests
 ```
 
-### **Step 2: Install dependencies**
+### **Step 2: Create virtual environment and install dependencies**
 ```bash
+# Create virtual environment (first time only)
+python3 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate
+
 # Install Python packages
 pip install -r requirements.txt
 
@@ -32,7 +38,18 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
-### **Step 3: Create .env file**
+**Note:** Always activate venv before running tests:
+```bash
+source venv/bin/activate
+```
+
+### **Step 3: Run setup script**
+```bash
+# Creates all required __init__.py files and directories
+./setup.sh
+```
+
+### **Step 4: Create .env file**
 ```bash
 # Copy template
 cp env.template .env
@@ -51,7 +68,7 @@ TEST_USER_PASSWORD=1Hey2Yash*
 
 **✅ All credentials are already filled in!**
 
-### **Step 4: Run the test!**
+### **Step 5: Run the test!**
 ```bash
 # Run with visible browser (see what happens)
 ./run_ai_agent_test.sh --headed

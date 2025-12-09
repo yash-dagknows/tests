@@ -8,6 +8,9 @@
 
 set -e
 
+# Set PYTHONPATH to include current directory
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'

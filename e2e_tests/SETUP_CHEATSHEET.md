@@ -6,8 +6,11 @@
 
 ```bash
 cd tests/e2e_tests
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
+./setup.sh
 cp env.template .env
 ./run_ai_agent_test.sh --headed
 ```
@@ -30,6 +33,10 @@ docker-compose -f local-docker-c-backup-bfr-reorder.yml up -d
 
 # 3. Setup tests
 cd ../tests/e2e_tests
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium
 cp env.template .env
 
 # 4. Edit .env:
