@@ -497,29 +497,80 @@ class SettingsPage(BasePage):
         workspace_input.fill("")
         workspace_input.fill(workspace_name)
         logger.info(f"✓ Typed workspace name: {workspace_name}")
+        
+        # Wait a moment for UI to update (button might become enabled after input)
+        self.page.wait_for_timeout(1000)
+        
         self.screenshot(f"after-typing-workspace-{workspace_name}")
         
-        # Click Add button
+        # Click Add button (it's next to the input field)
         add_button_selectors = [
             'button:has-text("Add")',
-            'button[type="submit"]',
+            'button.btn:has-text("Add")',
+            'button[class*="btn"]:has-text("Add")',
+            'input[type="button"][value="Add"]',
             'input[type="submit"][value="Add"]',
+            'button[type="submit"]',
+            # Try finding near the workspace input
+            'input[placeholder="Workspace name"] ~ button',
+            'input[placeholder="Workspace name"] + button',
+            # Look in the Create new workspace section
+            'text=Create new workspace >> .. >> button:has-text("Add")',
+            'text=Create new workspace >> .. >> button',
+            # XPath fallbacks
+            '//button[contains(text(), "Add")]',
+            '//input[@type="button" and @value="Add"]',
         ]
         
         add_clicked = False
         for selector in add_button_selectors:
             try:
                 locator = self.page.locator(selector)
-                if locator.count() > 0:
-                    locator.first.click()
-                    add_clicked = True
-                    logger.info("✓ Clicked Add button")
-                    break
+                count = locator.count()
+                logger.debug(f"Selector '{selector}' found {count} elements")
+                
+                if count > 0:
+                    # Try to find the Add button specifically in Create workspace section
+                    element = locator.first
+                    if element.is_visible(timeout=2000):
+                        element.click()
+                        add_clicked = True
+                        logger.info(f"✓ Clicked Add button with selector: {selector}")
+                        break
             except Exception as e:
                 logger.debug(f"Add button selector '{selector}' failed: {e}")
         
         if not add_clicked:
+            # Final attempt: Look for any visible button near the input
+            try:
+                logger.warning("Trying fallback: clicking first visible button near input")
+                # Find all buttons on the page
+                all_buttons = self.page.locator('button').all()
+                logger.info(f"Found {len(all_buttons)} total buttons on page")
+                
+                # Try to find a button that's close to the input and has "Add" text
+                for btn in all_buttons:
+                    try:
+                        text = btn.text_content() or ""
+                        if "Add" in text and btn.is_visible():
+                            logger.info(f"Found button with text: '{text}'")
+                            btn.click()
+                            add_clicked = True
+                            logger.info("✓ Clicked Add button (fallback method)")
+                            break
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.error(f"Fallback also failed: {e}")
+        
+        if not add_clicked:
             self.screenshot("add-button-not-found")
+            # Log page content for debugging
+            try:
+                logger.error("Page HTML snippet:")
+                logger.error(self.page.content()[:2000])
+            except Exception:
+                pass
             raise Exception("Could not find or click Add button")
         
         # Wait for workspace to be created
