@@ -68,52 +68,82 @@ e2e_tests/
 
 ## 🚀 **Quick Start**
 
-### **1. Install Dependencies**
+### **⚡ One-Command Installation (Recommended)**
 
 ```bash
 cd tests/e2e_tests
+./install.sh
+```
+
+This installs everything: system dependencies, Python packages, Playwright browsers, and project structure.  
+📖 See [ONE_COMMAND_INSTALL.md](ONE_COMMAND_INSTALL.md) for details.
+
+### **1. Manual Installation (Alternative)**
+
+```bash
+cd tests/e2e_tests
+
+# Install system dependencies (Ubuntu/Debian)
+sudo apt-get install -y $(cat system_requirements.txt | grep -v '^#')
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
 
 # Install Python dependencies
 pip install -r requirements.txt
 
 # Install Playwright browsers
-playwright install
+playwright install chromium
+
+# Setup project structure
+./setup.sh
 ```
 
 ### **2. Configure Environment**
 
-Create `.env` file:
+The `.env` file is **auto-created** by `install.sh` and pre-configured for `dev.dagknows.com`.
+
+If you need to modify it:
 
 ```bash
-# .env
+# .env (already configured)
 DAGKNOWS_URL=https://dev.dagknows.com
-DAGKNOWS_TOKEN=your-jwt-token-here
-TEST_USER_EMAIL=test@dagknows.com
-TEST_USER_PASSWORD=your-password
+DAGKNOWS_PROXY=?proxy=dev1
+DAGKNOWS_TOKEN=<auto-set-with-valid-jwt>
+TEST_USER_EMAIL=yash+user@dagknows.com
+TEST_USER_PASSWORD=<auto-set>
 TEST_ORG=dagknows
 ```
+
+📖 See [LOCAL_VS_DEV_CONFIG.md](LOCAL_VS_DEV_CONFIG.md) for local setup details.
 
 ### **3. Run Tests**
 
 ```bash
-# Run all E2E tests
-pytest
+# Activate virtual environment first!
+source venv/bin/activate
 
-# Run only API tests
-pytest api_tests/
+# Quick test - AI Agent workflow (recommended)
+./run_ai_agent_test.sh
 
-# Run only UI tests
-pytest ui_tests/
+# Run all UI tests
+pytest ui_tests/ -v
+
+# Run all API tests
+pytest api_tests/ -v
 
 # Run specific test
-pytest api_tests/test_task_lifecycle.py
+pytest ui_tests/test_ai_agent_workflow.py -v
 
-# Run with verbose output
-pytest -v
+# Run with headed browser (for debugging)
+pytest ui_tests/ --headed --slowmo 1000
 
 # Run and generate HTML report
 pytest --html=reports/report.html
 ```
+
+📖 Quick guides: [RUN_NOW.md](RUN_NOW.md) | [QUICK_SETUP_GUIDE.md](QUICK_SETUP_GUIDE.md)
 
 ---
 

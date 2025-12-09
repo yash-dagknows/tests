@@ -159,6 +159,114 @@ cat .env | grep PROXY
 
 ---
 
+## 🔴 **Issue: "Host system is missing dependencies to run browsers"**
+
+### **Error Message:**
+```
+╔══════════════════════════════════════════════════════╗
+║ Host system is missing dependencies to run browsers. ║
+║ Please install them with the following command:      ║
+║     sudo playwright install-deps                     ║
+╚══════════════════════════════════════════════════════╝
+```
+
+OR
+
+```
+E: Package 'libasound2' has no installation candidate
+Failed to install browser dependencies
+```
+
+### **✅ Solution: Install system dependencies**
+
+**Option 1: Use updated install script (recommended)**
+```bash
+cd /home/ubuntu/tests/e2e_tests
+./install.sh
+```
+
+**Option 2: Manual install (Ubuntu 24.04+)**
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+    libatk1.0-0t64 \
+    libatk-bridge2.0-0t64 \
+    libcups2t64 \
+    libatspi2.0-0t64 \
+    libasound2t64 \
+    libglib2.0-0t64 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libxshmfence1 \
+    libglu1-mesa \
+    fonts-liberation \
+    libnss3 \
+    libnspr4 \
+    libdbus-1-3 \
+    libxcb1 \
+    libxkbcommon0 \
+    libx11-6 \
+    libx11-xcb1
+```
+
+> **📋 Note for Ubuntu 24.04 users:** Ubuntu 24.04 (Noble) uses `t64` suffix for some packages (e.g., `libasound2t64` instead of `libasound2`). See [UBUNTU_24_FIX.md](UBUNTU_24_FIX.md) for details.
+
+**Option 3: Ubuntu 22.04 or older**
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libatspi2.0-0 \
+    libasound2 \
+    libglib2.0-0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libxshmfence1 \
+    libglu1-mesa \
+    fonts-liberation \
+    libnss3 \
+    libnspr4
+```
+
+**After installing dependencies:**
+```bash
+cd /home/ubuntu/tests/e2e_tests
+source venv/bin/activate
+pytest ui_tests/test_ai_agent_workflow.py -v
+```
+
+---
+
+## 🔴 **Issue: Running on headless server (no display)**
+
+### **✅ Solution: Run in headless mode (no --headed flag)**
+
+If you're on a server without a display (like Ubuntu server):
+
+```bash
+# Don't use --headed
+./run_ai_agent_test.sh
+
+# Or with pytest
+pytest ui_tests/test_ai_agent_workflow.py -v
+```
+
+Tests will run in headless mode automatically. Screenshots are still captured!
+
+---
+
 ## 🔴 **Issue: Browser doesn't open with --headed**
 
 ### **✅ Solution: Install chromium**
@@ -166,6 +274,7 @@ cat .env | grep PROXY
 ```bash
 source venv/bin/activate
 playwright install chromium
+sudo playwright install-deps chromium
 ```
 
 ---

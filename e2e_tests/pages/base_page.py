@@ -7,6 +7,7 @@ All page objects inherit from this base class.
 import logging
 from typing import Optional
 from playwright.sync_api import Page, Locator
+from config.env import config
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,8 @@ class BasePage:
             page: Playwright Page instance
         """
         self.page = page
+        self.base_url = config.BASE_URL
+        self.proxy_param = config.PROXY_PARAM
     
     def goto(self, path: str = "/") -> None:
         """
@@ -30,8 +33,22 @@ class BasePage:
         Args:
             path: Relative path from base URL
         """
-        logger.info(f"Navigating to: {path}")
-        self.page.goto(path)
+        # Construct full URL
+        if path.startswith("http://") or path.startswith("https://"):
+            # Already a full URL
+            url = path
+        else:
+            # Relative path - combine with base URL
+            url = f"{self.base_url}{path}"
+            
+            # Add proxy parameter if not already in URL
+            if self.proxy_param and "?" not in url:
+                url = f"{url}{self.proxy_param}"
+            elif self.proxy_param and "?" in url:
+                url = f"{url}&{self.proxy_param.lstrip('?')}"
+        
+        logger.info(f"Navigating to: {url}")
+        self.page.goto(url)
     
     def wait_for_load(self, timeout: int = 30000) -> None:
         """Wait for page to load."""
