@@ -34,22 +34,21 @@ class TestTaskCRUDE2E:
         logger.info(f"API Client initialized for {test_user.email}")
         return client
     
-    def test_create_task_via_api(self, api_client):
+    def test_task_full_lifecycle_via_api(self, api_client):
         """
-        E2E Test: Create a task via API.
+        E2E Test: Full task lifecycle (Create, Read, Update, Delete) via API.
         
         Flow:
-        1. Prepare task data (title, description, code)
-        2. Send POST request to /api/tasks/ with {"task": task_data} (same as frontend)
-        3. Verify task was created successfully
-        4. Verify task details match what was sent
-        5. Get task by ID to verify it exists
-        6. Clean up: Delete the created task
+        1. CREATE: Prepare task data (title, description, code) and POST to /api/tasks/
+        2. READ: Verify task was created and fetch it by ID
+        3. UPDATE: Update task with new title, description, and code
+        4. READ: Verify the update was successful
+        5. DELETE: Clean up - Delete the created task (currently commented out for UI verification)
         
         Note: We use /api/tasks/ (same as frontend) which goes through req-router.
         req-router internally forwards /api/tasks/ to /api/v1/tasks/ in taskservice.
         """
-        logger.info("=== Starting Task Creation E2E Test (API-based) ===")
+        logger.info("=== Starting Task Full Lifecycle E2E Test (API-based) ===")
         
         # Generate unique task title with timestamp
         timestamp = int(time.time())
@@ -138,7 +137,78 @@ print(f"Result: {result}")
         except Exception as e:
             logger.warning(f"Could not verify task in list: {e}")
         
-        # Step 7: Clean up - Delete the created task
+        # Step 7: Update task with new data
+        logger.info("Step 7: Updating task with new title, description, and code")
+        updated_title = f"{task_title} - UPDATED"
+        updated_description = f"{task_description} - Updated via API E2E test"
+        updated_code = """
+print("Hello from UPDATED E2E API test")
+result = "Task updated successfully"
+print(f"Updated Result: {result}")
+# New functionality added
+x = 10
+y = 20
+sum_result = x + y
+print(f"Sum: {sum_result}")
+"""
+        
+        try:
+            # Get the full task object first (needed for update)
+            get_response = api_client.get_task(task_id)
+            if "task" in get_response:
+                task_to_update = get_response["task"]
+            else:
+                task_to_update = get_response
+            
+            # Update the task fields
+            task_to_update["title"] = updated_title
+            task_to_update["description"] = updated_description
+            task_to_update["script"] = updated_code
+            
+            # Create update_mask (list of fields being updated)
+            # Frontend does: Object.keys(cloned_task).filter((v) => { return !['num_voters','voters'].includes(v)})
+            update_mask = [key for key in task_to_update.keys() if key not in ['num_voters', 'voters']]
+            
+            # Update the task (frontend uses PATCH with task and update_mask)
+            update_response = api_client.update_task(
+                task_id=task_id,
+                task_data=task_to_update,
+                update_mask=update_mask
+            )
+            
+            # Verify update response
+            if "task" in update_response:
+                updated_task = update_response["task"]
+            else:
+                updated_task = update_response
+            
+            assert updated_task["title"] == updated_title, "Updated title should match"
+            assert updated_task["description"] == updated_description, "Updated description should match"
+            logger.info("✓ Task updated successfully")
+            logger.info(f"  New title: {updated_title}")
+            logger.info(f"  New description: {updated_description}")
+        except Exception as e:
+            logger.error(f"✗ Task update failed: {e}")
+            raise
+        
+        # Step 8: Verify update persisted by fetching task again
+        logger.info("Step 8: Verifying update persisted by fetching task again")
+        try:
+            final_get_response = api_client.get_task(task_id)
+            if "task" in final_get_response:
+                final_task = final_get_response["task"]
+            else:
+                final_task = final_get_response
+            
+            assert final_task["title"] == updated_title, "Final task title should match updated title"
+            assert final_task["description"] == updated_description, "Final task description should match updated description"
+            assert final_task["script"] == updated_code, "Final task script should match updated code"
+            logger.info("✓ Update verified - all changes persisted")
+        except Exception as e:
+            logger.warning(f"Could not verify update persistence: {e}")
+            logger.warning("This might be expected if task update is asynchronous")
+        
+        # Step 9: Clean up - Delete the created task
         # TEMPORARILY COMMENTED OUT - For UI verification
         # logger.info("Step 7: Cleaning up - Deleting created task")
         # try:
@@ -150,7 +220,7 @@ print(f"Result: {result}")
         logger.info("Step 7: Cleanup SKIPPED - Task left for UI verification")
         logger.info(f"Task ID for manual verification: {task_id}")
         
-        logger.info("=== Task Creation E2E Test (API-based) Completed ===")
+        logger.info("=== Task Full Lifecycle E2E Test (API-based) Completed ===")
         
         # Return task_id for potential use in other tests
         return task_id

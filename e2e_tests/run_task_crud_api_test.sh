@@ -59,9 +59,9 @@ echo "  Task CRUD API E2E Test Runner"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "Starting test..."
-echo "Command: pytest api_tests/test_task_crud_api.py::TestTaskCRUDE2E::test_create_task_via_api -v"
+echo "Command: pytest api_tests/test_task_crud_api.py::TestTaskCRUDE2E::test_task_full_lifecycle_via_api -v"
 
-pytest api_tests/test_task_crud_api.py::TestTaskCRUDE2E::test_create_task_via_api -v
+pytest api_tests/test_task_crud_api.py::TestTaskCRUDE2E::test_task_full_lifecycle_via_api -v
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

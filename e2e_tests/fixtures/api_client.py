@@ -155,13 +155,16 @@ class DagKnowsAPIClient:
         """
         Update task via API (matches frontend behavior).
         
-        Frontend calls: logFetchAJAX(getUrl(`/api/tasks/${taskId}/?wsid=${wsid}`), {method: 'PUT', body: task})
+        Frontend calls: logFetchAJAX(getUrl(`/api/tasks/${taskId}/?wsid=${wsid}`), {
+            method: 'PATCH',
+            body: {"task": patch, "update_mask": update_mask, "sub_task_ops": stops}
+        })
         
         Args:
             task_id: Task ID
-            task_data: Full task object (like frontend sends)
+            task_data: Task object with fields to update
             wsid: Optional workspace ID
-            update_mask: List of fields being updated (optional)
+            update_mask: List of fields being updated (optional, frontend generates from task keys)
             
         Returns:
             Updated task response
@@ -170,13 +173,15 @@ class DagKnowsAPIClient:
         if wsid:
             params["wsid"] = wsid
         
-        # Frontend sends the task object directly, not wrapped
-        payload = task_data
-        if update_mask:
-            payload["update_mask"] = update_mask
+        # Frontend wraps in {"task": patch, "update_mask": update_mask}
+        payload = {
+            "task": task_data,
+            "update_mask": update_mask or []
+        }
         
         # Use /api/tasks/ (same as frontend) - req-router will forward to /api/v1/tasks/ internally
-        response = self._request("PUT", f"/api/tasks/{task_id}", json=payload, params=params)
+        # Frontend uses PATCH, not PUT
+        response = self._request("PATCH", f"/api/tasks/{task_id}", json=payload, params=params)
         return response.json()
     
     def delete_task(self, task_id: str, wsid: Optional[str] = None, recurse: bool = False, forced: bool = False) -> Optional[Dict[str, Any]]:
