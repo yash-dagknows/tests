@@ -1633,19 +1633,13 @@ class SettingsPage(BasePage):
             logger.info(f"User: {user_email}")
         self.screenshot(f"before-assign-role-{workspace_name}-{role_name}")
         
-        # Find the dkroles_table (Workspace Roles table)
-        dkroles_table = self.page.locator('table.dkroles_table').first
-        if dkroles_table.count() == 0:
-            self.screenshot("dkroles-table-not-found")
-            raise Exception("Could not find Workspace Roles table (dkroles_table)")
-        
-        logger.info("✓ Found Workspace Roles table")
-        
-        # Find the workspace row - workspace name is in td.space_title_td
+        # Find the workspace row directly - workspace name is in td.space_title_td
+        # Try multiple selectors to find the workspace row
         workspace_row_selectors = [
             f'table.dkroles_table >> tr:has(td.space_title_td:has-text("{workspace_name}"))',
             f'table.dkroles_table >> tr >> td.space_title_td:has-text("{workspace_name}") >> ..',
             f'//table[contains(@class, "dkroles_table")]//tr[.//td[contains(@class, "space_title_td") and contains(text(), "{workspace_name}")]]',
+            f'tr:has-text("{workspace_name}")',
         ]
         
         workspace_row = None
@@ -1654,9 +1648,10 @@ class SettingsPage(BasePage):
                 locator = self.page.locator(selector)
                 if locator.count() > 0:
                     workspace_row = locator.first
-                    if workspace_row.is_visible(timeout=2000):
-                        logger.info(f"Found workspace row with selector: {selector}")
-                        break
+                    # Wait for it to be attached to DOM, but don't require visibility yet
+                    workspace_row.wait_for(state="attached", timeout=5000)
+                    logger.info(f"Found workspace row with selector: {selector}")
+                    break
             except Exception as e:
                 logger.debug(f"Workspace row selector '{selector}' failed: {e}")
                 continue
@@ -1665,10 +1660,15 @@ class SettingsPage(BasePage):
             self.screenshot(f"workspace-row-{workspace_name}-not-found")
             raise Exception(f"Could not find workspace '{workspace_name}' in Workspace Roles table")
         
-        # Scroll to the workspace row
-        workspace_row.scroll_into_view_if_needed()
-        self.page.wait_for_timeout(500)
         logger.info(f"✓ Found workspace '{workspace_name}' row")
+        
+        # Try to scroll to the workspace row (but don't fail if it times out)
+        try:
+            workspace_row.scroll_into_view_if_needed(timeout=5000)
+            self.page.wait_for_timeout(300)
+        except Exception as e:
+            logger.warning(f"Could not scroll workspace row into view: {e}, continuing anyway")
+            self.page.wait_for_timeout(300)
         
         # Find the dropdown in the 2nd column (td.hidden_dkrole_container)
         # The dropdown has class 'class_dkrole_dropdown'
@@ -1676,6 +1676,8 @@ class SettingsPage(BasePage):
             f'table.dkroles_table >> tr:has(td.space_title_td:has-text("{workspace_name}")) >> td.hidden_dkrole_container >> select.class_dkrole_dropdown',
             f'table.dkroles_table >> tr:has(td.space_title_td:has-text("{workspace_name}")) >> td.hidden_dkrole_container >> select',
             f'//table[contains(@class, "dkroles_table")]//tr[.//td[contains(@class, "space_title_td") and contains(text(), "{workspace_name}")]]//td[contains(@class, "hidden_dkrole_container")]//select[contains(@class, "class_dkrole_dropdown")]',
+            f'tr:has-text("{workspace_name}") >> td.hidden_dkrole_container >> select.class_dkrole_dropdown',
+            f'tr:has-text("{workspace_name}") >> td >> select',
         ]
         
         role_dropdown = None
@@ -1684,6 +1686,8 @@ class SettingsPage(BasePage):
                 locator = self.page.locator(selector)
                 if locator.count() > 0:
                     element = locator.first
+                    # Wait for element to be attached, then check visibility
+                    element.wait_for(state="attached", timeout=5000)
                     if element.is_visible(timeout=2000):
                         role_dropdown = element
                         logger.info(f"Found role dropdown with selector: {selector}")
@@ -1696,42 +1700,38 @@ class SettingsPage(BasePage):
             self.screenshot(f"role-dropdown-{workspace_name}-not-found")
             raise Exception(f"Could not find role dropdown for workspace '{workspace_name}'")
         
-        # Click the dropdown to open it
-        role_dropdown.scroll_into_view_if_needed()
-        self.page.wait_for_timeout(300)
-        role_dropdown.click()
-        self.page.wait_for_timeout(1000)  # Wait for dropdown menu to appear
-        logger.info("✓ Clicked role dropdown")
-        self.screenshot(f"role-dropdown-opened-{workspace_name}")
-        
-        # Select the role from the dropdown (it's a <select> element, so use select_option)
+        # Scroll to the dropdown and select the role (it's a <select> element, so use select_option)
         try:
-            role_dropdown.select_option(label=role_name)
+            role_dropdown.scroll_into_view_if_needed(timeout=5000)
+            self.page.wait_for_timeout(300)
+        except Exception as e:
+            logger.warning(f"Could not scroll dropdown into view: {e}, continuing anyway")
+        
+        # Select the role from the dropdown using select_option (most reliable for <select> elements)
+        try:
+            role_dropdown.select_option(label=role_name, timeout=10000)
             role_selected = True
             logger.info(f"✓ Selected role '{role_name}' using select_option")
         except Exception as e:
-            logger.debug(f"select_option failed: {e}, trying alternative methods")
-            # Fallback: try clicking option element
-            role_option_selectors = [
-                f'select.class_dkrole_dropdown >> option:has-text("{role_name}")',
-                f'select.class_dkrole_dropdown >> option[value="{role_name}"]',
-                f'//select[contains(@class, "class_dkrole_dropdown")]//option[contains(text(), "{role_name}")]',
-            ]
-            
-            role_selected = False
-            for selector in role_option_selectors:
+            logger.debug(f"select_option with label failed: {e}, trying value")
+            try:
+                role_dropdown.select_option(value=role_name, timeout=10000)
+                role_selected = True
+                logger.info(f"✓ Selected role '{role_name}' using select_option with value")
+            except Exception as e2:
+                logger.debug(f"select_option with value failed: {e2}, trying click")
+                # Fallback: try clicking the dropdown and then the option
                 try:
-                    locator = self.page.locator(selector)
-                    if locator.count() > 0:
-                        element = locator.first
-                        if element.is_visible(timeout=2000):
-                            element.click()
-                            role_selected = True
-                            logger.info(f"✓ Selected role '{role_name}' with selector: {selector}")
-                            break
-                except Exception as e2:
-                    logger.debug(f"Role option selector '{selector}' failed: {e2}")
-                    continue
+                    role_dropdown.click()
+                    self.page.wait_for_timeout(500)
+                    option_selector = f'select.class_dkrole_dropdown >> option:has-text("{role_name}")'
+                    option = self.page.locator(option_selector).first
+                    if option.is_visible(timeout=2000):
+                        option.click()
+                        role_selected = True
+                        logger.info(f"✓ Selected role '{role_name}' by clicking option")
+                except Exception as e3:
+                    logger.debug(f"Click option failed: {e3}")
         
         if not role_selected:
             self.screenshot(f"role-option-{role_name}-not-found")
