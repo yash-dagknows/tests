@@ -55,6 +55,7 @@ class DagKnowsAPIClient:
         endpoint: str,
         with_proxy: bool = True,
         params: Optional[Dict[str, Any]] = None,
+        allow_redirects: bool = True,
         **kwargs
     ) -> requests.Response:
         """
@@ -87,7 +88,22 @@ class DagKnowsAPIClient:
         if 'json' in kwargs:
             logger.debug(f"Request payload: {kwargs['json']}")
         
+        # Set allow_redirects in kwargs if not already set
+        if 'allow_redirects' not in kwargs:
+            kwargs['allow_redirects'] = allow_redirects
+        
         response = self.session.request(method, url, params=request_params, **kwargs)
+        
+        # Log response status for debugging
+        logger.debug(f"Response status: {response.status_code}")
+        logger.debug(f"Response headers: {dict(response.headers)}")
+        
+        # Check if we got HTML instead of JSON (likely a redirect or error page)
+        content_type = response.headers.get('Content-Type', '').lower()
+        if 'text/html' in content_type and response.status_code == 200:
+            logger.warning(f"Received HTML response instead of JSON. Status: {response.status_code}")
+            logger.warning(f"Response preview: {response.text[:200]}")
+            # Don't raise here, let the caller handle it
         
         try:
             response.raise_for_status()
@@ -449,8 +465,6 @@ class DagKnowsAPIClient:
         Frontend calls: logFetchAJAX(getUrl('/get_org_users'), { method: "POST", body: {} })
         This is used in the User Dashboard page to get all users in the organization.
         
-        Note: There's also /api/users/?ids=all but the frontend uses /get_org_users for the user management page.
-        
         Args:
             user_ids: Optional list of user IDs to fetch (not used for org users, kept for compatibility)
             
@@ -459,12 +473,30 @@ class DagKnowsAPIClient:
         """
         # Frontend uses POST /get_org_users with empty body
         # Note: Frontend sends JSON.stringify({}) which is "{}"
-        # The frontend doesn't explicitly set Content-Type, but requests library will set it automatically
-        response = self._request("POST", "/get_org_users", json={}, with_proxy=True)
+        # Disable redirect following to see if endpoint redirects
+        response = self._request("POST", "/get_org_users", json={}, with_proxy=True, allow_redirects=False)
         
-        # Check response status and content
-        logger.debug(f"get_org_users response status: {response.status_code}")
-        logger.debug(f"get_org_users response headers: {dict(response.headers)}")
+        # Check if we got a redirect response
+        if response.status_code in [301, 302, 303, 307, 308]:
+            logger.warning(f"/get_org_users returned redirect (status: {response.status_code})")
+            logger.warning(f"Location header: {response.headers.get('Location', 'N/A')}")
+            # Follow the redirect manually if needed, or handle it
+            # For now, let's try with allow_redirects=True to see what happens
+            logger.info("Retrying with redirect following enabled")
+            response = self._request("POST", "/get_org_users", json={}, with_proxy=True, allow_redirects=True)
+        
+        # Check if we got HTML (likely a redirect to a page)
+        content_type = response.headers.get('Content-Type', '').lower()
+        if 'text/html' in content_type:
+            logger.error(f"/get_org_users returned HTML instead of JSON (status: {response.status_code})")
+            logger.error(f"This usually means the endpoint redirected to a page")
+            logger.error(f"Response preview: {response.text[:300]}")
+            raise ValueError(
+                f"Endpoint /get_org_users returned HTML instead of JSON. "
+                f"This usually indicates the endpoint redirected to a page. "
+                f"Status: {response.status_code}, Content-Type: {content_type}. "
+                f"Please check if the endpoint exists and is accessible via API."
+            )
         
         # Check if response is empty or not JSON
         if not response.text or not response.text.strip():
