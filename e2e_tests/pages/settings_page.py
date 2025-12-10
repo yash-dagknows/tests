@@ -804,93 +804,102 @@ class SettingsPage(BasePage):
         
         self.screenshot(f"after-typing-role-name-{role_name}")
         
-        # Click Add button - MUST be within "Create new custom role" section (RBAC tab)
-        # Prioritize selectors that are scoped to the "Create new custom role" section
-        # to avoid finding buttons from other tabs (like General settings)
-        add_button_selectors = [
-            # Most specific: Within "Create new custom role" section
-            'text=Create new custom role >> .. >> button:has-text("Add")',
-            'text=Create new custom role >> .. >> button',
-            '//div[contains(., "Create new custom role")]//button[contains(text(), "Add")]',
-            # Near the role input (should be in the same section)
-            'input[placeholder="Role name"] ~ button:has-text("Add")',
-            'input[placeholder="Role name"] + button:has-text("Add")',
-            'input[placeholder="Role name"] ~ button',
-            'input[placeholder="Role name"] + button',
-            # More generic (but still try to verify it's in the right section)
-            'button:has-text("Add")',
-            'button.btn:has-text("Add")',
-            'input[type="button"][value="Add"]',
-        ]
-        
+        # Click Add button - Based on frontend structure:
+        # The "Create new custom role" section is a table with:
+        # - Header: "Create new custom role" (colspan="2")
+        # - Body row with:
+        #   - First <td>: Input field (role_input)
+        #   - Second <td>: Add button
+        # So we need to find the table row and get the 2nd column (td)
         add_clicked = False
-        for selector in add_button_selectors:
-            try:
-                locator = self.page.locator(selector)
-                count = locator.count()
-                logger.debug(f"Selector '{selector}' found {count} elements")
-                
-                if count > 0:
-                    # Check all matching elements to find the one in "Create new custom role" section
-                    for idx in range(count):
-                        element = locator.nth(idx)
-                        if element.is_visible(timeout=2000):
-                            # Verify it's in the "Create new custom role" section by checking position
-                            try:
-                                element_box = element.bounding_box()
-                                input_box = role_input.bounding_box()
-                                
-                                if element_box and input_box:
-                                    # Check if button is near the role input (same section)
-                                    y_diff = abs(element_box['y'] - input_box['y'])
-                                    x_diff = element_box['x'] - input_box['x']
-                                    
-                                    # Button should be on same row (within 30px vertically) and to the right
-                                    if y_diff < 30 and x_diff > 0:
-                                        element.click()
-                                        add_clicked = True
-                                        logger.info(f"✓ Clicked Add button with selector: {selector} (element {idx}, verified in section)")
-                                        break
-                            except Exception:
-                                # If position check fails, still try clicking if it's one of the specific selectors
-                                if 'Create new custom role' in selector or 'Role name' in selector:
-                                    element.click()
-                                    add_clicked = True
-                                    logger.info(f"✓ Clicked Add button with selector: {selector} (element {idx}, section-specific)")
-                                    break
-                    
-                    if add_clicked:
-                        break
-            except Exception as e:
-                logger.debug(f"Add button selector '{selector}' failed: {e}")
         
-        if not add_clicked:
-            # Final attempt: Look for Add buttons near the role input by position only
-            try:
-                logger.warning("Trying fallback: finding Add button by position near role input")
-                # Find all Add buttons
-                all_add_buttons = self.page.locator('button:has-text("Add")').all()
-                logger.info(f"Found {len(all_add_buttons)} Add buttons on page")
+        # Strategy 1: Find the table row containing the role input, then get 2nd column
+        try:
+            logger.info("Trying to find Add button in 2nd column of table row")
+            # Find the parent row of the role input
+            role_input_row = role_input.locator('.. >> ..')  # Go up: input -> td -> tr
+            if role_input_row.count() == 0:
+                # Try alternative: find row containing the input
+                role_input_row = self.page.locator(f'//tr[.//input[@placeholder="Role name"]]').first
+            
+            if role_input_row.count() > 0:
+                # Get all cells in the row
+                row_cells = role_input_row.locator('td').all()
+                logger.info(f"Found {len(row_cells)} cells in role creation row")
                 
-                input_box = role_input.bounding_box()
-                if input_box:
-                    for btn in all_add_buttons:
-                        if btn.is_visible():
-                            try:
-                                btn_box = btn.bounding_box()
-                                if btn_box:
-                                    y_diff = abs(btn_box['y'] - input_box['y'])
-                                    x_diff = btn_box['x'] - input_box['x']
-                                    # Button should be on same row (within 30px) and to the right
-                                    if y_diff < 30 and x_diff > 0:
-                                        btn.click()
-                                        add_clicked = True
-                                        logger.info(f"✓ Clicked Add button by position fallback (y_diff={y_diff:.0f}, x_diff={x_diff:.0f})")
-                                        break
-                            except Exception:
-                                pass
+                if len(row_cells) >= 2:
+                    # Get the 2nd column (index 1) which contains the Add button
+                    second_cell = row_cells[1]
+                    add_button = second_cell.locator('button:has-text("Add")').first
+                    
+                    if add_button.count() == 0:
+                        # Try without text filter
+                        add_button = second_cell.locator('button').first
+                    
+                    if add_button.count() > 0:
+                        if add_button.is_visible(timeout=2000):
+                            add_button.scroll_into_view_if_needed()
+                            self.page.wait_for_timeout(300)
+                            add_button.click()
+                            add_clicked = True
+                            logger.info("✓ Clicked Add button by accessing 2nd column directly from table row")
+        except Exception as e:
+            logger.debug(f"Direct column access failed: {e}")
+        
+        # Strategy 2: Find table with "Create new custom role" header, then get button in 2nd column
+        if not add_clicked:
+            try:
+                logger.info("Trying to find Add button via table structure")
+                # Find table with "Create new custom role" header
+                create_role_table = self.page.locator('table:has-text("Create new custom role")').first
+                if create_role_table.count() > 0:
+                    # Get the tbody row
+                    tbody_row = create_role_table.locator('tbody >> tr').first
+                    if tbody_row.count() > 0:
+                        # Get 2nd column
+                        second_cell = tbody_row.locator('td:nth-child(2)').first
+                        add_button = second_cell.locator('button:has-text("Add")').first
+                        if add_button.count() == 0:
+                            add_button = second_cell.locator('button').first
+                        
+                        if add_button.count() > 0 and add_button.is_visible(timeout=2000):
+                            add_button.scroll_into_view_if_needed()
+                            self.page.wait_for_timeout(300)
+                            add_button.click()
+                            add_clicked = True
+                            logger.info("✓ Clicked Add button via table structure (2nd column)")
             except Exception as e:
-                logger.debug(f"Fallback button search failed: {e}")
+                logger.debug(f"Table structure approach failed: {e}")
+        
+        # Strategy 3: Fallback to selectors (if direct access didn't work)
+        if not add_clicked:
+            add_button_selectors = [
+                # Within "Create new custom role" table, 2nd column
+                'table:has-text("Create new custom role") >> tbody >> tr >> td:nth-child(2) >> button:has-text("Add")',
+                'table:has-text("Create new custom role") >> tbody >> tr >> td:nth-child(2) >> button',
+                # Near the role input
+                'input[placeholder="Role name"] >> .. >> .. >> td:nth-child(2) >> button:has-text("Add")',
+                # Generic fallbacks
+                'text=Create new custom role >> .. >> button:has-text("Add")',
+                'input[placeholder="Role name"] ~ button:has-text("Add")',
+                'button:has-text("Add")',
+            ]
+            
+            for selector in add_button_selectors:
+                try:
+                    locator = self.page.locator(selector)
+                    if locator.count() > 0:
+                        element = locator.first
+                        if element.is_visible(timeout=2000):
+                            element.scroll_into_view_if_needed()
+                            self.page.wait_for_timeout(300)
+                            element.click()
+                            add_clicked = True
+                            logger.info(f"✓ Clicked Add button with selector: {selector}")
+                            break
+                except Exception as e:
+                    logger.debug(f"Add button selector '{selector}' failed: {e}")
+                    continue
         
         if not add_clicked:
             self.screenshot("add-role-button-not-found")
