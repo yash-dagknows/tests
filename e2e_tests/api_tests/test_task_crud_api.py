@@ -139,13 +139,16 @@ print(f"Result: {result}")
             logger.warning(f"Could not verify task in list: {e}")
         
         # Step 7: Clean up - Delete the created task
-        logger.info("Step 7: Cleaning up - Deleting created task")
-        try:
-            api_client.delete_task(task_id)
-            logger.info(f"✓ Task deleted: {task_id}")
-        except Exception as e:
-            logger.warning(f"Task deletion failed (may need manual cleanup): {e}")
-            logger.warning(f"Task ID for manual cleanup: {task_id}")
+        # TEMPORARILY COMMENTED OUT - For UI verification
+        # logger.info("Step 7: Cleaning up - Deleting created task")
+        # try:
+        #     api_client.delete_task(task_id)
+        #     logger.info(f"✓ Task deleted: {task_id}")
+        # except Exception as e:
+        #     logger.warning(f"Task deletion failed (may need manual cleanup): {e}")
+        #     logger.warning(f"Task ID for manual cleanup: {task_id}")
+        logger.info("Step 7: Cleanup SKIPPED - Task left for UI verification")
+        logger.info(f"Task ID for manual verification: {task_id}")
         
         logger.info("=== Task Creation E2E Test (API-based) Completed ===")
         
