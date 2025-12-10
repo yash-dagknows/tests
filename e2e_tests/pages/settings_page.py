@@ -1737,40 +1737,40 @@ class SettingsPage(BasePage):
                 f'tr:has-text("{workspace_name}") >> td >> select.class_dkrole_dropdown',
                 f'tr:has-text("{workspace_name}") >> td >> select',
             ])
-        
-        role_dropdown = None
-        for selector in dropdown_selectors:
-            try:
-                locator = self.page.locator(selector)
-                if locator.count() > 0:
-                    element = locator.first
-                    # Wait for element to be attached (even if hidden)
-                    element.wait_for(state="attached", timeout=5000)
-                    # Check if it exists in DOM (even if hidden)
-                    try:
-                        is_attached = element.evaluate("el => el !== null")
-                        if is_attached:
-                            # If hidden, try to make it visible or use it anyway
-                            is_visible = element.is_visible(timeout=1000)
-                            if not is_visible:
-                                logger.info(f"Dropdown found but hidden, trying to make visible")
-                                # Try to remove display:none style
-                                try:
-                                    element.evaluate("el => { if (el.style.display === 'none') el.style.display = 'block'; }")
-                                    self.page.wait_for_timeout(300)
-                                except Exception:
-                                    pass
+            
+            # Try the selectors
+            for selector in dropdown_selectors:
+                try:
+                    locator = self.page.locator(selector)
+                    if locator.count() > 0:
+                        element = locator.first
+                        # Wait for element to be attached (even if hidden)
+                        element.wait_for(state="attached", timeout=5000)
+                        # Check if it exists in DOM (even if hidden)
+                        try:
+                            is_attached = element.evaluate("el => el !== null")
+                            if is_attached:
+                                # If hidden, try to make it visible or use it anyway
+                                is_visible = element.is_visible(timeout=1000)
+                                if not is_visible:
+                                    logger.info(f"Dropdown found but hidden, trying to make visible")
+                                    # Try to remove display:none style
+                                    try:
+                                        element.evaluate("el => { if (el.style.display === 'none') el.style.display = 'block'; }")
+                                        self.page.wait_for_timeout(300)
+                                    except Exception:
+                                        pass
+                                role_dropdown = element
+                                logger.info(f"Found role dropdown with selector: {selector} (visible: {is_visible})")
+                                break
+                        except Exception as eval_error:
+                            logger.debug(f"Error evaluating element: {eval_error}, trying anyway")
                             role_dropdown = element
-                            logger.info(f"Found role dropdown with selector: {selector} (visible: {is_visible})")
+                            logger.info(f"Found role dropdown with selector: {selector} (using anyway)")
                             break
-                    except Exception as eval_error:
-                        logger.debug(f"Error evaluating element: {eval_error}, trying anyway")
-                        role_dropdown = element
-                        logger.info(f"Found role dropdown with selector: {selector} (using anyway)")
-                        break
-            except Exception as e:
-                logger.debug(f"Dropdown selector '{selector}' failed: {e}")
-                continue
+                except Exception as e:
+                    logger.debug(f"Dropdown selector '{selector}' failed: {e}")
+                    continue
         
         if not role_dropdown:
             # Last resort: try to find any select in the workspace row's second column
