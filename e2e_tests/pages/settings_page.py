@@ -686,11 +686,20 @@ class SettingsPage(BasePage):
         Create a new custom role.
         This method mimics the exact pattern used in create_workspace().
         
+        IMPORTANT: Must be on RBAC tab (tab=rbac) which shows Workspaces content.
+        
         Args:
             role_name: Name of the role to create (e.g., "read1")
         """
         logger.info(f"Creating custom role: {role_name}")
         self.screenshot(f"before-create-role-{role_name}")
+        
+        # Verify we're on RBAC tab
+        current_url = self.page.url
+        if "tab=rbac" not in current_url:
+            logger.warning(f"Not on RBAC tab! Current URL: {current_url}")
+            logger.info("Navigating to RBAC tab...")
+            self.navigate_to_rbac_tab()
         
         # Scroll to the section first
         self.scroll_to_create_custom_role_section()
@@ -730,23 +739,23 @@ class SettingsPage(BasePage):
         
         self.screenshot(f"after-typing-role-name-{role_name}")
         
-        # Click Add button (exactly like workspace creation - same selectors, same pattern)
+        # Click Add button - MUST be within "Create new custom role" section (RBAC tab)
+        # Prioritize selectors that are scoped to the "Create new custom role" section
+        # to avoid finding buttons from other tabs (like General settings)
         add_button_selectors = [
-            'button:has-text("Add")',
-            'button.btn:has-text("Add")',
-            'button[class*="btn"]:has-text("Add")',
-            'input[type="button"][value="Add"]',
-            'input[type="submit"][value="Add"]',
-            'button[type="submit"]',
-            # Try finding near the role input
-            'input[placeholder="Role name"] ~ button',
-            'input[placeholder="Role name"] + button',
-            # Look in the Create new custom role section
+            # Most specific: Within "Create new custom role" section
             'text=Create new custom role >> .. >> button:has-text("Add")',
             'text=Create new custom role >> .. >> button',
-            # XPath fallbacks
-            '//button[contains(text(), "Add")]',
-            '//input[@type="button" and @value="Add"]',
+            '//div[contains(., "Create new custom role")]//button[contains(text(), "Add")]',
+            # Near the role input (should be in the same section)
+            'input[placeholder="Role name"] ~ button:has-text("Add")',
+            'input[placeholder="Role name"] + button:has-text("Add")',
+            'input[placeholder="Role name"] ~ button',
+            'input[placeholder="Role name"] + button',
+            # More generic (but still try to verify it's in the right section)
+            'button:has-text("Add")',
+            'button.btn:has-text("Add")',
+            'input[type="button"][value="Add"]',
         ]
         
         add_clicked = False
@@ -757,38 +766,61 @@ class SettingsPage(BasePage):
                 logger.debug(f"Selector '{selector}' found {count} elements")
                 
                 if count > 0:
-                    # Try to find the Add button specifically in Create custom role section
-                    element = locator.first
-                    if element.is_visible(timeout=2000):
-                        element.click()
-                        add_clicked = True
-                        logger.info(f"✓ Clicked Add button with selector: {selector}")
+                    # Check all matching elements to find the one in "Create new custom role" section
+                    for idx in range(count):
+                        element = locator.nth(idx)
+                        if element.is_visible(timeout=2000):
+                            # Verify it's in the "Create new custom role" section by checking position
+                            try:
+                                element_box = element.bounding_box()
+                                input_box = role_input.bounding_box()
+                                
+                                if element_box and input_box:
+                                    # Check if button is near the role input (same section)
+                                    y_diff = abs(element_box['y'] - input_box['y'])
+                                    x_diff = element_box['x'] - input_box['x']
+                                    
+                                    # Button should be on same row (within 30px vertically) and to the right
+                                    if y_diff < 30 and x_diff > 0:
+                                        element.click()
+                                        add_clicked = True
+                                        logger.info(f"✓ Clicked Add button with selector: {selector} (element {idx}, verified in section)")
+                                        break
+                            except Exception:
+                                # If position check fails, still try clicking if it's one of the specific selectors
+                                if 'Create new custom role' in selector or 'Role name' in selector:
+                                    element.click()
+                                    add_clicked = True
+                                    logger.info(f"✓ Clicked Add button with selector: {selector} (element {idx}, section-specific)")
+                                    break
+                    
+                    if add_clicked:
                         break
             except Exception as e:
                 logger.debug(f"Add button selector '{selector}' failed: {e}")
         
         if not add_clicked:
-            # Final attempt: Look for any visible button near the input (exactly like workspace creation)
+            # Final attempt: Look for Add buttons near the role input by position only
             try:
-                logger.warning("Trying fallback: clicking first visible button near input")
-                # Find all buttons on the page
-                all_buttons = self.page.locator('button').all()
-                logger.info(f"Found {len(all_buttons)} total buttons on page")
+                logger.warning("Trying fallback: finding Add button by position near role input")
+                # Find all Add buttons
+                all_add_buttons = self.page.locator('button:has-text("Add")').all()
+                logger.info(f"Found {len(all_add_buttons)} Add buttons on page")
                 
-                for btn in all_buttons:
-                    if btn.is_visible():
-                        btn_text = btn.text_content()
-                        if btn_text and "Add" in btn_text:
-                            # Check if it's near the role input
+                input_box = role_input.bounding_box()
+                if input_box:
+                    for btn in all_add_buttons:
+                        if btn.is_visible():
                             try:
                                 btn_box = btn.bounding_box()
-                                input_box = role_input.bounding_box()
-                                if btn_box and input_box:
+                                if btn_box:
                                     y_diff = abs(btn_box['y'] - input_box['y'])
-                                    if y_diff < 50:  # Same row or close
+                                    x_diff = btn_box['x'] - input_box['x']
+                                    # Button should be on same row (within 30px) and to the right
+                                    if y_diff < 30 and x_diff > 0:
                                         btn.click()
                                         add_clicked = True
-                                        logger.info(f"✓ Clicked Add button by fallback (text: '{btn_text}')")
+                                        logger.info(f"✓ Clicked Add button by position fallback (y_diff={y_diff:.0f}, x_diff={x_diff:.0f})")
                                         break
                             except Exception:
                                 pass
