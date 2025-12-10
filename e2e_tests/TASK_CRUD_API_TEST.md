@@ -15,20 +15,20 @@ This is an **API-based End-to-End (E2E) test** for task CRUD operations. It send
 ### Endpoint Routing
 
 The codebase has two endpoints:
-- **Legacy**: `/api/tasks/` - Used by frontend, gets proxied by `req-router` to `/api/v1/tasks/`
-- **New**: `/api/v1/tasks/` - Direct endpoint registered in `taskservice`, used by API clients
+- **Public API**: `/api/tasks/` - Used by frontend, handled by req-router
+- **Internal API**: `/api/v1/tasks/` - Direct endpoint in taskservice (used internally by req-router)
 
-**Why we use `/api/v1/tasks/`:**
-1. It's the new/correct endpoint
-2. More direct (doesn't go through req-router forwarding)
-3. Matches what the backend actually implements
-4. Better for API-based testing
+**Why we use `/api/tasks/` (same as frontend):**
+1. Matches exactly how the frontend calls the API
+2. Goes through the same routing path (nginx → req-router → taskservice)
+3. req-router handles authentication, headers, and forwards to `/api/v1/tasks/` internally
+4. Ensures we test the same code path as the frontend
 
 ### Request Flow
 
 ```
-Frontend: /api/tasks/ → req-router → /api/v1/tasks/ → taskservice
-API Test:  /api/v1/tasks/ → taskservice (direct)
+Frontend: /api/tasks/ → nginx → req-router → /api/v1/tasks/ → taskservice
+API Test:  /api/tasks/ → nginx → req-router → /api/v1/tasks/ → taskservice (same path)
 ```
 
 ## Test Structure
@@ -41,11 +41,11 @@ API Test:  /api/v1/tasks/ → taskservice (direct)
 ### Test Flow
 
 1. **Prepare task data** - Title, description, Python code
-2. **Create task** - POST `/api/v1/tasks/` with `{"task": task_data}`
+2. **Create task** - POST `/api/tasks/` with `{"task": task_data}` (same as frontend)
 3. **Verify response** - Check task ID, title, description
-4. **Get task** - GET `/api/v1/tasks/{task_id}` to verify it exists
+4. **Get task** - GET `/api/tasks/{task_id}` to verify it exists
 5. **List tasks** - Verify task appears in task list
-6. **Cleanup** - DELETE `/api/v1/tasks/{task_id}`
+6. **Cleanup** - DELETE `/api/tasks/{task_id}`
 
 ## Running the Test
 

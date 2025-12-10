@@ -14,9 +14,8 @@ Based on frontend API calls:
 import pytest
 import logging
 import time
-from fixtures.api_client import DagKnowsAPIClient, create_api_client
+from fixtures.api_client import create_api_client
 from config.test_users import get_test_user
-from config.env import config
 
 logger = logging.getLogger(__name__)
 
@@ -41,15 +40,14 @@ class TestTaskCRUDE2E:
         
         Flow:
         1. Prepare task data (title, description, code)
-        2. Send POST request to /api/v1/tasks/ with {"task": task_data}
+        2. Send POST request to /api/tasks/ with {"task": task_data} (same as frontend)
         3. Verify task was created successfully
         4. Verify task details match what was sent
         5. Get task by ID to verify it exists
         6. Clean up: Delete the created task
         
-        Note: We use /api/v1/tasks/ (the new endpoint) instead of /api/tasks/ (legacy).
-        The frontend uses /api/tasks/ which gets proxied to /api/v1/tasks/ by req-router.
-        For direct API tests, we use /api/v1/tasks/ directly.
+        Note: We use /api/tasks/ (same as frontend) which goes through req-router.
+        req-router internally forwards /api/tasks/ to /api/v1/tasks/ in taskservice.
         """
         logger.info("=== Starting Task Creation E2E Test (API-based) ===")
         
@@ -80,7 +78,7 @@ print(f"Result: {result}")
         logger.info(f"  Script type: python")
         
         # Step 2: Create task via API
-        logger.info("Step 2: Creating task via API POST /api/v1/tasks/")
+        logger.info("Step 2: Creating task via API POST /api/tasks/ (same as frontend)")
         try:
             create_response = api_client.create_task(task_data)
             logger.info(f"✓ API request successful")
@@ -121,7 +119,7 @@ print(f"Result: {result}")
             
             assert fetched_task["id"] == task_id, "Fetched task ID should match"
             assert fetched_task["title"] == task_title, "Fetched task title should match"
-            logger.info(f"✓ Task verified via GET /api/v1/tasks/{task_id}")
+            logger.info(f"✓ Task verified via GET /api/tasks/{task_id}")
         except Exception as e:
             logger.warning(f"Could not fetch task immediately after creation: {e}")
             logger.info("This might be expected if task creation is asynchronous")
@@ -134,7 +132,7 @@ print(f"Result: {result}")
             task_ids = [t.get("id") for t in tasks if t.get("id")]
             
             if task_id in task_ids:
-                logger.info(f"✓ Task appears in list")
+                logger.info("✓ Task appears in list")
             else:
                 logger.warning(f"Task {task_id} not found in list (might be pagination issue)")
         except Exception as e:

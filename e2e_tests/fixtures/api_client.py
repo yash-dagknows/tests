@@ -102,11 +102,11 @@ class DagKnowsAPIClient:
     
     def create_task(self, task_data: Dict[str, Any], wsid: Optional[str] = None) -> Dict[str, Any]:
         """
-        Create a new task via API.
+        Create a new task via API (matches frontend behavior).
         
-        Uses the new /api/v1/tasks/ endpoint (not the legacy /api/tasks/).
-        The frontend uses /api/tasks/ which gets proxied to /api/v1/tasks/ by req-router.
-        For direct API tests, we use /api/v1/tasks/ directly.
+        Frontend calls: logFetchAJAX(getUrl('/api/tasks/'), {method: 'POST', body: {"task": task}})
+        The /api/tasks/ endpoint is handled by req-router which forwards to /api/v1/tasks/ internally.
+        We use /api/tasks/ to match the frontend exactly.
         
         Args:
             task_data: Task data dictionary
@@ -123,14 +123,15 @@ class DagKnowsAPIClient:
         if wsid:
             params["wsid"] = wsid
         
-        response = self._request("POST", "/api/v1/tasks/", json=payload, params=params)
+        # Use /api/tasks/ (same as frontend) - req-router will forward to /api/v1/tasks/ internally
+        response = self._request("POST", "/api/tasks/", json=payload, params=params)
         return response.json()
     
     def get_task(self, task_id: str, wsid: Optional[str] = None) -> Dict[str, Any]:
         """
-        Get task by ID via API.
+        Get task by ID via API (matches frontend behavior).
         
-        Uses the new /api/v1/tasks/ endpoint (not the legacy /api/tasks/).
+        Frontend calls: logFetchAJAX(getUrl(`/api/tasks/${taskId}/?wsid=${wsid}`))
         
         Args:
             task_id: Task ID
@@ -140,7 +141,8 @@ class DagKnowsAPIClient:
         if wsid:
             params["wsid"] = wsid
         
-        response = self._request("GET", f"/api/v1/tasks/{task_id}", params=params)
+        # Use /api/tasks/ (same as frontend) - req-router will forward to /api/v1/tasks/ internally
+        response = self._request("GET", f"/api/tasks/{task_id}", params=params)
         return response.json()
     
     def update_task(
@@ -151,9 +153,9 @@ class DagKnowsAPIClient:
         update_mask: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
-        Update task via API.
+        Update task via API (matches frontend behavior).
         
-        Uses the new /api/v1/tasks/ endpoint (not the legacy /api/tasks/).
+        Frontend calls: logFetchAJAX(getUrl(`/api/tasks/${taskId}/?wsid=${wsid}`), {method: 'PUT', body: task})
         
         Args:
             task_id: Task ID
@@ -173,14 +175,15 @@ class DagKnowsAPIClient:
         if update_mask:
             payload["update_mask"] = update_mask
         
-        response = self._request("PUT", f"/api/v1/tasks/{task_id}", json=payload, params=params)
+        # Use /api/tasks/ (same as frontend) - req-router will forward to /api/v1/tasks/ internally
+        response = self._request("PUT", f"/api/tasks/{task_id}", json=payload, params=params)
         return response.json()
     
     def delete_task(self, task_id: str, wsid: Optional[str] = None, recurse: bool = False, forced: bool = False) -> Optional[Dict[str, Any]]:
         """
-        Delete task via API.
+        Delete task via API (matches frontend behavior).
         
-        Uses the new /api/v1/tasks/ endpoint (not the legacy /api/tasks/).
+        Frontend calls: logFetchAJAX(getUrl(`/api/tasks/${task_id}/?recurse=${recurse}&wsid=${wsid}&forced=${forced}`), {method: 'DELETE'})
         
         Args:
             task_id: Task ID
@@ -200,7 +203,8 @@ class DagKnowsAPIClient:
             params["forced"] = "true"
         
         try:
-            response = self._request("DELETE", f"/api/v1/tasks/{task_id}", params=params)
+            # Use /api/tasks/ (same as frontend) - req-router will forward to /api/v1/tasks/ internally
+            response = self._request("DELETE", f"/api/tasks/{task_id}", params=params)
             return response.json() if response.text else {}
         except requests.HTTPError as e:
             if e.response.status_code == 500:
@@ -217,9 +221,9 @@ class DagKnowsAPIClient:
         **filters
     ) -> Dict[str, Any]:
         """
-        List tasks via API.
+        List tasks via API (matches frontend behavior).
         
-        Uses the new /api/v1/tasks/ endpoint (not the legacy /api/tasks/).
+        Frontend calls: logFetchAJAX(getUrl('/api/tasks/?page_key=...&page_size=...'))
         
         Args:
             page_size: Number of tasks per page
@@ -240,7 +244,8 @@ class DagKnowsAPIClient:
             params["wsid"] = wsid
         params.update(filters)
         
-        response = self._request("GET", "/api/v1/tasks/", params=params)
+        # Use /api/tasks/ (same as frontend) - req-router will forward to /api/v1/tasks/ internally
+        response = self._request("GET", "/api/tasks/", params=params)
         return response.json()
     
     # ==================== ALERT OPERATIONS ====================
