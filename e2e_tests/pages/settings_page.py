@@ -684,6 +684,7 @@ class SettingsPage(BasePage):
     def create_custom_role(self, role_name: str) -> None:
         """
         Create a new custom role.
+        This method mimics the exact pattern used in create_workspace().
         
         Args:
             role_name: Name of the role to create (e.g., "read1")
@@ -694,169 +695,135 @@ class SettingsPage(BasePage):
         # Scroll to the section first
         self.scroll_to_create_custom_role_section()
         
-        # Find and fill the role name input
-        role_input = None
+        # Find role name input (exactly like workspace creation)
         input_selectors = [
-            self.ROLE_NAME_INPUT,
-            'input[placeholder*="Role name"]',
-            'label:has-text("Role name") + input',
-            'text=Create new custom role >> .. >> input'
+            'input[placeholder="Role name"]',
+            'input[name*="role"]',
+            'input[type="text"]',
         ]
         
+        role_input = None
         for selector in input_selectors:
-            locator = self.page.locator(selector)
-            if locator.count() > 0 and locator.first.is_visible():
-                role_input = locator.first
-                logger.info(f"Found role name input with: {selector}")
-                break
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    first_input = locator.first
+                    if first_input.is_visible():
+                        role_input = first_input
+                        logger.info(f"Found role input with: {selector}")
+                        break
+            except Exception:
+                pass
         
         if not role_input:
             self.screenshot("role-name-input-not-found")
             raise Exception("Could not find role name input field")
         
+        # Clear and type role name (exactly like workspace creation)
+        role_input.click()
+        role_input.fill("")
         role_input.fill(role_name)
-        logger.info(f"✓ Filled role name: {role_name}")
+        logger.info(f"✓ Typed role name: {role_name}")
+        
+        # Wait a moment for UI to update (button might become enabled after input)
         self.page.wait_for_timeout(1000)
-        self.screenshot(f"after-filling-role-name-{role_name}")
         
-        # Click Add button - MUST be the 2nd Add button on the page (1st is for workspace, 2nd is for role)
-        # The Add button is next to the input field in "Create new custom role" section
-        logger.info("Finding Add button for 'Create new custom role' section (2nd Add button on page)")
+        self.screenshot(f"after-typing-role-name-{role_name}")
         
-        # Strategy 1: Find Add button specifically within "Create new custom role" section
+        # Click Add button (exactly like workspace creation - same selectors, same pattern)
         add_button_selectors = [
+            'button:has-text("Add")',
+            'button.btn:has-text("Add")',
+            'button[class*="btn"]:has-text("Add")',
+            'input[type="button"][value="Add"]',
+            'input[type="submit"][value="Add"]',
+            'button[type="submit"]',
+            # Try finding near the role input
+            'input[placeholder="Role name"] ~ button',
+            'input[placeholder="Role name"] + button',
+            # Look in the Create new custom role section
             'text=Create new custom role >> .. >> button:has-text("Add")',
             'text=Create new custom role >> .. >> button',
-            '//div[contains(., "Create new custom role")]//button[contains(text(), "Add")]',
-            'input[placeholder="Role name"] ~ button:has-text("Add")',
-            'input[placeholder="Role name"] + button:has-text("Add")',
+            # XPath fallbacks
+            '//button[contains(text(), "Add")]',
+            '//input[@type="button" and @value="Add"]',
         ]
         
-        role_add_button = None
+        add_clicked = False
         for selector in add_button_selectors:
             try:
                 locator = self.page.locator(selector)
-                if locator.count() > 0:
+                count = locator.count()
+                logger.debug(f"Selector '{selector}' found {count} elements")
+                
+                if count > 0:
+                    # Try to find the Add button specifically in Create custom role section
                     element = locator.first
                     if element.is_visible(timeout=2000):
-                        # Verify it's near the role name input
-                        try:
-                            element_box = element.bounding_box()
-                            input_box = role_input.bounding_box()
-                            if element_box and input_box:
-                                y_diff = abs(element_box['y'] - input_box['y'])
-                                if y_diff < 50:  # Same row or close
-                                    role_add_button = element
-                                    logger.info(f"Found Add button for role with selector: {selector}")
-                                    break
-                        except Exception:
-                            # If position check fails, use it anyway
-                            role_add_button = element
-                            logger.info(f"Found Add button for role with selector: {selector} (position check skipped)")
-                            break
+                        element.click()
+                        add_clicked = True
+                        logger.info(f"✓ Clicked Add button with selector: {selector}")
+                        break
             except Exception as e:
-                logger.debug(f"Selector '{selector}' failed: {e}")
-                continue
+                logger.debug(f"Add button selector '{selector}' failed: {e}")
         
-        # Strategy 2: Find all Add buttons and select the 2nd one (index 1) as fallback
-        if not role_add_button:
-            logger.info("Trying to find 2nd Add button by index...")
-            all_add_buttons = self.page.locator('button:has-text("Add")').all()
-            logger.info(f"Found {len(all_add_buttons)} Add buttons on the page")
-            
-            if len(all_add_buttons) >= 2:
-                # Try the 2nd button (index 1)
-                try:
-                    btn = all_add_buttons[1]
-                    if btn.is_visible(timeout=2000):
-                        # Verify it's near the role name input
-                        btn_box = btn.bounding_box()
-                        input_box = role_input.bounding_box()
-                        if btn_box and input_box:
-                            y_diff = abs(btn_box['y'] - input_box['y'])
-                            if y_diff < 50:  # Same row or close
-                                role_add_button = btn
-                                logger.info("Found 2nd Add button (index 1) near role input")
-                except Exception as e:
-                    logger.debug(f"Error with 2nd Add button: {e}")
-        
-        # Click the button if found
-        add_clicked = False
-        if role_add_button:
+        if not add_clicked:
+            # Final attempt: Look for any visible button near the input (exactly like workspace creation)
             try:
-                role_add_button.scroll_into_view_if_needed()
-                self.page.wait_for_timeout(500)  # Wait before click
+                logger.warning("Trying fallback: clicking first visible button near input")
+                # Find all buttons on the page
+                all_buttons = self.page.locator('button').all()
+                logger.info(f"Found {len(all_buttons)} total buttons on page")
                 
-                # Verify input still has the value before clicking
-                current_value = role_input.input_value()
-                if current_value != role_name:
-                    logger.warning(f"Input value changed. Expected: '{role_name}', Got: '{current_value}'. Re-filling...")
-                    role_input.fill(role_name)
-                    self.page.wait_for_timeout(500)
-                
-                # Click the button
-                role_add_button.click()
-                add_clicked = True
-                logger.info("✓ Clicked Add button for role")
-                
-                # Wait a moment for the click to register
-                self.page.wait_for_timeout(1000)
-                
+                for btn in all_buttons:
+                    if btn.is_visible():
+                        btn_text = btn.text_content()
+                        if btn_text and "Add" in btn_text:
+                            # Check if it's near the role input
+                            try:
+                                btn_box = btn.bounding_box()
+                                input_box = role_input.bounding_box()
+                                if btn_box and input_box:
+                                    y_diff = abs(btn_box['y'] - input_box['y'])
+                                    if y_diff < 50:  # Same row or close
+                                        btn.click()
+                                        add_clicked = True
+                                        logger.info(f"✓ Clicked Add button by fallback (text: '{btn_text}')")
+                                        break
+                            except Exception:
+                                pass
             except Exception as e:
-                logger.error(f"Failed to click Add button: {e}")
-                self.screenshot("add-button-click-failed")
-                raise Exception(f"Could not click Add button for role: {e}")
+                logger.debug(f"Fallback button search failed: {e}")
         
-        if add_clicked:
-            # Wait for the input field to clear (indicates successful creation)
-            # Check if input value becomes empty after clicking
-            logger.info("Waiting for input field to clear (indicates role creation was submitted)...")
-            input_cleared = False
-            for check_attempt in range(10):  # Check every 200ms for up to 2 seconds
-                self.page.wait_for_timeout(200)
-                try:
-                    current_value = role_input.input_value()
-                    if current_value == "":
-                        logger.info(f"✓ Input field cleared (attempt {check_attempt + 1}), indicating role creation was submitted")
-                        input_cleared = True
-                        break
-                except Exception:
-                    pass
-            
-            if not input_cleared:
-                logger.warning("Input field did not clear - role creation may have failed")
-                # Take screenshot for debugging
-                self.screenshot("role-creation-input-not-cleared")
-            
-            # Wait for network requests to complete
-            self.page.wait_for_load_state("networkidle", timeout=10000)
-            
-            # Wait for role to appear in privileges table (user reported ~1 second, using 5 seconds for safety)
-            # Also try to detect when the role appears in the table
-            logger.info("Waiting for role to appear in privileges table...")
-            role_appeared = False
-            for wait_attempt in range(10):  # Check every 500ms for up to 5 seconds
-                self.page.wait_for_timeout(500)
-                # Check if role name appears in privileges table text
-                try:
-                    privileges_table = self._find_privileges_table()
-                    table_text = privileges_table.text_content()
-                    if role_name in table_text:
-                        logger.info(f"✓ Role '{role_name}' detected in privileges table (attempt {wait_attempt + 1})")
-                        role_appeared = True
-                        break
-                except Exception:
-                    pass
-            
-            if not role_appeared:
-                logger.warning(f"Role '{role_name}' not detected in table text after 5 seconds, continuing anyway...")
-                self.page.wait_for_timeout(2000)  # Additional wait
-            
-            self.screenshot(f"after-create-role-{role_name}")
-            logger.info(f"✓ Custom role '{role_name}' creation requested")
-        else:
+        if not add_clicked:
             self.screenshot("add-role-button-not-found")
             raise Exception("Could not find or click Add button for role")
+        
+        # Wait for network requests to complete
+        self.page.wait_for_load_state("networkidle", timeout=10000)
+        
+        # Wait for role to appear in privileges table (user reported ~1 second, using 5 seconds for safety)
+        logger.info("Waiting for role to appear in privileges table...")
+        role_appeared = False
+        for wait_attempt in range(10):  # Check every 500ms for up to 5 seconds
+            self.page.wait_for_timeout(500)
+            # Check if role name appears in privileges table text
+            try:
+                privileges_table = self._find_privileges_table()
+                table_text = privileges_table.text_content()
+                if role_name in table_text:
+                    logger.info(f"✓ Role '{role_name}' detected in privileges table (attempt {wait_attempt + 1})")
+                    role_appeared = True
+                    break
+            except Exception:
+                pass
+        
+        if not role_appeared:
+            logger.warning(f"Role '{role_name}' not detected in table text after 5 seconds, continuing anyway...")
+            self.page.wait_for_timeout(2000)  # Additional wait
+        
+        self.screenshot(f"after-create-role-{role_name}")
+        logger.info(f"✓ Custom role '{role_name}' creation requested")
     
     def verify_role_in_privileges_table(self, role_name: str, timeout: int = 20000) -> None:
         """
