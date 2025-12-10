@@ -634,7 +634,10 @@ class SettingsPage(BasePage):
     
     # Privileges table selectors
     PRIVILEGES_TABLE_HEADING = 'text=Privileges'
-    PRIVILEGES_TABLE = 'table'  # The privileges table
+    # The privileges table is the table that comes after "Create new custom role" section
+    # It has "Privileges" as the first column header and role names as other column headers
+    # It contains privilege rows like "task.view_code", "task.list", etc.
+    PRIVILEGES_TABLE = 'table:has-text("task.view_code"), table:has-text("task.list"), table:has-text("task.view_io"), text=Privileges >> xpath=following::table[1], text=Create new custom role >> xpath=following::table[1]'
     PRIVILEGE_ROW = 'tr:has-text("{privilege_name}")'  # Row for a specific privilege
     ROLE_COLUMN_HEADER = 'th:has-text("{role_name}")'  # Column header for a role
     PRIVILEGE_CHECKBOX = 'tr:has-text("{privilege_name}") >> td >> input[type="checkbox"]'  # Checkbox in privilege row
@@ -716,44 +719,93 @@ class SettingsPage(BasePage):
         self.page.wait_for_timeout(1000)
         self.screenshot(f"after-filling-role-name-{role_name}")
         
-        # Find and click the Add button (next to the input field)
+        # Find and click the Add button (next to the input field in "Create new custom role" section)
+        # The Add button should be horizontally next to the role name input field
         add_button = None
-        add_button_selectors = [
-            f'{self.ROLE_NAME_INPUT} ~ {self.ADD_ROLE_BUTTON}',
-            f'{self.ROLE_NAME_INPUT} + {self.ADD_ROLE_BUTTON}',
-            f'text=Create new custom role >> .. >> {self.ADD_ROLE_BUTTON}',
-            self.ADD_ROLE_BUTTON
-        ]
         
-        for selector in add_button_selectors:
-            locator = self.page.locator(selector)
-            if locator.count() > 0:
-                # Check if it's in the "Create new custom role" section (not workspace section)
-                box = locator.first.bounding_box()
-                if box:
-                    # Find the create role heading to get its position
-                    heading_box = self.page.locator(self.CREATE_CUSTOM_ROLE_HEADING).first.bounding_box()
-                    if heading_box and abs(box['y'] - heading_box['y']) < 200:  # Within 200px of heading
-                        add_button = locator.first
-                        logger.info(f"Found Add button for role with: {selector}")
-                        break
+        # Strategy 1: Find Add button within the "Create new custom role" section
+        # Look for the section container first
+        create_role_section = self.page.locator(self.CREATE_CUSTOM_ROLE_HEADING).first
+        if create_role_section.count() > 0:
+            # Find Add button within the same section (parent or following sibling)
+            section_container = create_role_section.locator('xpath=ancestor::div[contains(@class, "section") or contains(@class, "card") or contains(@class, "box")] | ancestor::div[1]')
+            
+            # Try to find Add button near the role name input
+            add_button_selectors = [
+                # Direct sibling of input
+                f'{self.ROLE_NAME_INPUT} + button:has-text("Add")',
+                f'{self.ROLE_NAME_INPUT} ~ button:has-text("Add")',
+                # Within the same container as the input
+                f'text=Create new custom role >> .. >> button:has-text("Add")',
+                # XPath: button with "Add" text that's near the role name input
+                f'//div[contains(., "Create new custom role")]//input[@placeholder="Role name"]/following-sibling::button[contains(text(), "Add")]',
+                f'//div[contains(., "Create new custom role")]//button[contains(text(), "Add")]',
+            ]
+            
+            for selector in add_button_selectors:
+                try:
+                    locator = self.page.locator(selector)
+                    if locator.count() > 0:
+                        btn = locator.first
+                        if btn.is_visible():
+                            # Verify it's near the role name input (same row)
+                            btn_box = btn.bounding_box()
+                            input_box = role_input.bounding_box()
+                            if btn_box and input_box:
+                                # Check if they're on the same row (y-coordinate similar) and button is to the right
+                                if abs(btn_box['y'] - input_box['y']) < 30 and btn_box['x'] > input_box['x']:
+                                    add_button = btn
+                                    logger.info(f"Found Add button for role with: {selector}")
+                                    break
+                except Exception as e:
+                    logger.debug(f"Selector '{selector}' failed: {e}")
+                    continue
         
+        # Strategy 2: Find Add button by position relative to role name input
         if not add_button:
-            # Fallback: find any visible "Add" button
-            all_add_buttons = self.page.locator('button:has-text("Add")').all()
-            for btn in all_add_buttons:
-                if btn.is_visible():
-                    # Check if it's near the role name input
-                    btn_box = btn.bounding_box()
-                    input_box = role_input.bounding_box()
-                    if btn_box and input_box and abs(btn_box['y'] - input_box['y']) < 50:
-                        add_button = btn
-                        logger.info("Found Add button near role name input")
-                        break
+            logger.info("Trying to find Add button by position...")
+            input_box = role_input.bounding_box()
+            if input_box:
+                # Find all Add buttons and check which one is next to the input
+                all_add_buttons = self.page.locator('button:has-text("Add")').all()
+                for btn in all_add_buttons:
+                    if btn.is_visible():
+                        btn_box = btn.bounding_box()
+                        if btn_box:
+                            # Check if button is on the same row (y similar) and to the right of input
+                            y_diff = abs(btn_box['y'] - input_box['y'])
+                            x_diff = btn_box['x'] - input_box['x']
+                            if y_diff < 30 and 50 < x_diff < 300:  # Button is 50-300px to the right
+                                add_button = btn
+                                logger.info(f"Found Add button by position (y_diff={y_diff:.0f}, x_diff={x_diff:.0f})")
+                                break
         
         if add_button:
+            # Verify input field has the role name before clicking
+            current_input_value = role_input.input_value()
+            if current_input_value != role_name:
+                logger.warning(f"Input value mismatch. Expected: '{role_name}', Got: '{current_input_value}'")
+                role_input.fill(role_name)  # Re-fill if needed
+                self.page.wait_for_timeout(500)
+            
+            # Click the Add button
+            add_button.scroll_into_view_if_needed()
+            self.page.wait_for_timeout(500)  # Small wait before click
             add_button.click()
             logger.info("✓ Clicked Add button for role")
+            
+            # Wait for the input field to clear (indicates successful creation)
+            # Check if input value becomes empty after a short wait
+            self.page.wait_for_timeout(1000)  # Wait for UI to update
+            try:
+                current_value = role_input.input_value()
+                if current_value == "":
+                    logger.info("✓ Input field cleared, indicating role creation was submitted")
+                else:
+                    logger.info(f"Input field still has value: '{current_value}' (may have been cleared and refilled)")
+            except Exception:
+                logger.warning("Could not check input field value, but continuing...")
+            
             self.page.wait_for_load_state("networkidle", timeout=10000)
             
             # Wait for role to appear in privileges table (user reported ~1 second, using 5 seconds for safety)
@@ -762,11 +814,12 @@ class SettingsPage(BasePage):
             role_appeared = False
             for wait_attempt in range(10):  # Check every 500ms for up to 5 seconds
                 self.page.wait_for_timeout(500)
-                # Check if role name appears in table text
+                # Check if role name appears in privileges table text
                 try:
-                    table_text = self.page.locator(self.PRIVILEGES_TABLE).first.text_content()
+                    privileges_table = self._find_privileges_table()
+                    table_text = privileges_table.text_content()
                     if role_name in table_text:
-                        logger.info(f"✓ Role '{role_name}' detected in table (attempt {wait_attempt + 1})")
+                        logger.info(f"✓ Role '{role_name}' detected in privileges table (attempt {wait_attempt + 1})")
                         role_appeared = True
                         break
                 except Exception:
@@ -868,36 +921,94 @@ class SettingsPage(BasePage):
             except Exception as e:
                 logger.warning(f"Horizontal scroll attempt failed: {e}")
         
-        # Strategy 3: Check if role name appears anywhere in the table (even if not visible)
+        # Strategy 3: Check if role name appears anywhere in the privileges table (even if not visible)
         if not role_found:
-            logger.info("Checking if role name appears anywhere in the table...")
-            table_text = self.page.locator(self.PRIVILEGES_TABLE).first.text_content()
-            if role_name in table_text:
-                logger.info(f"✓ Role '{role_name}' text found in table content (may need scrolling)")
-                # Try scrolling to find it
-                try:
-                    self.scroll_horizontally_to_role_column(role_name)
-                    # Verify it's now visible
-                    role_header_selector = f'th:has-text("{role_name}")'
-                    if self.page.locator(role_header_selector).first.is_visible(timeout=3000):
-                        role_found = True
-                        logger.info(f"✓ Role '{role_name}' is now visible after scroll")
-                except Exception:
-                    pass
+            logger.info("Checking if role name appears anywhere in the privileges table...")
+            try:
+                privileges_table = self._find_privileges_table()
+                table_text = privileges_table.text_content()
+                if role_name in table_text:
+                    logger.info(f"✓ Role '{role_name}' text found in privileges table content (may need scrolling)")
+                    # Try scrolling to find it
+                    try:
+                        self.scroll_horizontally_to_role_column(role_name)
+                        # Verify it's now visible
+                        role_header_selector = f'th:has-text("{role_name}")'
+                        if self.page.locator(role_header_selector).first.is_visible(timeout=3000):
+                            role_found = True
+                            logger.info(f"✓ Role '{role_name}' is now visible after scroll")
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.warning(f"Could not check privileges table text: {e}")
         
         if not role_found:
             self.screenshot(f"role-{role_name}-not-found-in-table")
             # Log table headers for debugging
             try:
-                all_headers = self.page.locator(f'{self.PRIVILEGES_TABLE} >> thead >> th').all()
-                header_texts = [h.text_content() for h in all_headers]
-                logger.error(f"Available role headers in table: {header_texts}")
-            except Exception:
-                pass
+                privileges_table = self._find_privileges_table()
+                all_headers = privileges_table.locator('thead >> th').all()
+                header_texts = [h.text_content().strip() for h in all_headers if h.text_content().strip()]
+                logger.error(f"Available role headers in privileges table: {header_texts}")
+            except Exception as e:
+                logger.error(f"Could not get table headers: {e}")
             raise Exception(f"Role '{role_name}' not found in privileges table after {timeout}ms timeout")
         
         logger.info(f"✓ Role '{role_name}' verified in privileges table")
         self.screenshot(f"role-{role_name}-verified-in-table")
+    
+    def _find_privileges_table(self):
+        """
+        Find the correct privileges table by looking for specific indicators.
+        Returns the table locator that contains privilege rows and role columns.
+        """
+        logger.info("Finding the correct privileges table...")
+        
+        # Strategy 1: Find table that contains specific privilege names
+        privilege_indicators = ["task.view_code", "task.list", "task.view_io", "task.execute"]
+        for indicator in privilege_indicators:
+            try:
+                # Find table that contains this privilege text
+                table = self.page.locator(f'table:has-text("{indicator}")').first
+                if table.count() > 0 and table.is_visible():
+                    # Verify it has role columns (check for "Admin" or "Editor" in headers)
+                    table_text = table.text_content()
+                    if "Admin" in table_text or "Editor" in table_text or "Privileges" in table_text:
+                        logger.info(f"✓ Found privileges table using indicator: {indicator}")
+                        return table
+            except Exception:
+                continue
+        
+        # Strategy 2: Find table that comes after "Create new custom role" section
+        try:
+            create_role_section = self.page.locator(self.CREATE_CUSTOM_ROLE_HEADING).first
+            if create_role_section.count() > 0:
+                # Find the next table after this section
+                following_table = create_role_section.locator('xpath=following::table[1]').first
+                if following_table.count() > 0:
+                    table_text = following_table.text_content()
+                    # Verify it's the privileges table (has privilege names)
+                    if any(indicator in table_text for indicator in privilege_indicators):
+                        logger.info("✓ Found privileges table after 'Create new custom role' section")
+                        return following_table
+        except Exception as e:
+            logger.debug(f"Strategy 2 failed: {e}")
+        
+        # Strategy 3: Find table with "Privileges" heading nearby
+        try:
+            privileges_heading = self.page.locator(self.PRIVILEGES_TABLE_HEADING).first
+            if privileges_heading.count() > 0:
+                # Find table near the heading
+                table = privileges_heading.locator('xpath=following::table[1]').first
+                if table.count() > 0:
+                    logger.info("✓ Found privileges table near 'Privileges' heading")
+                    return table
+        except Exception as e:
+            logger.debug(f"Strategy 3 failed: {e}")
+        
+        # Fallback: Return first table (but log warning)
+        logger.warning("Could not find privileges table using specific indicators, using first table as fallback")
+        return self.page.locator('table').first
     
     def scroll_to_privileges_table(self) -> None:
         """Scroll to the privileges table section."""
@@ -905,14 +1016,14 @@ class SettingsPage(BasePage):
         self.screenshot("before-scroll-to-privileges")
         
         try:
-            heading = self.page.locator(self.PRIVILEGES_TABLE_HEADING)
-            heading.first.wait_for(state="visible", timeout=10000)
-            heading.first.scroll_into_view_if_needed()
+            # Find the correct privileges table
+            privileges_table = self._find_privileges_table()
+            privileges_table.scroll_into_view_if_needed()
             self.page.wait_for_timeout(1000)
             logger.info("✓ Scrolled to privileges table")
             self.screenshot("after-scroll-to-privileges")
         except Exception as e:
-            logger.error(f"Could not find privileges table heading: {e}")
+            logger.error(f"Could not scroll to privileges table: {e}")
             # Fallback: scroll down more
             self.page.evaluate("window.scrollBy(0, 1200)")
             self.page.wait_for_timeout(1000)
@@ -927,8 +1038,8 @@ class SettingsPage(BasePage):
         logger.info(f"Scrolling horizontally to find role column: {role_name}")
         self.screenshot(f"before-horizontal-scroll-{role_name}")
         
-        # Find the privileges table
-        table = self.page.locator(self.PRIVILEGES_TABLE).first
+        # Find the correct privileges table
+        table = self._find_privileges_table()
         if not table.is_visible():
             raise Exception("Privileges table not visible")
         
@@ -962,21 +1073,25 @@ class SettingsPage(BasePage):
         # Find the scrollable container (table wrapper or table itself)
         # Try to find a parent div with overflow-x
         scrollable_container = None
-        container_selectors = [
-            f'{self.PRIVILEGES_TABLE} >> xpath=ancestor::div[contains(@style, "overflow")]',
-            f'{self.PRIVILEGES_TABLE} >> xpath=ancestor::div[@class*="scroll"]',
-            f'{self.PRIVILEGES_TABLE} >> xpath=ancestor::div[@id*="table"]',
-        ]
-        
-        for selector in container_selectors:
-            try:
-                container_locator = self.page.locator(selector)
-                if container_locator.count() > 0:
-                    scrollable_container = container_locator.first
-                    logger.info(f"Found scrollable container with: {selector}")
-                    break
-            except Exception:
-                continue
+        try:
+            # Try to find scrollable container relative to the table
+            container_selectors = [
+                'xpath=ancestor::div[contains(@style, "overflow")]',
+                'xpath=ancestor::div[@class*="scroll"]',
+                'xpath=ancestor::div[@id*="table"]',
+            ]
+            
+            for selector in container_selectors:
+                try:
+                    container_locator = table.locator(selector)
+                    if container_locator.count() > 0:
+                        scrollable_container = container_locator.first
+                        logger.info(f"Found scrollable container with: {selector}")
+                        break
+                except Exception:
+                    continue
+        except Exception:
+            pass
         
         # If no specific container found, use the table itself
         if not scrollable_container:
@@ -1076,8 +1191,9 @@ class SettingsPage(BasePage):
         if role_header.count() == 0:
             raise Exception(f"Could not find role column header for '{role_name}'")
         
-        # Get all table headers to find the column index
-        all_headers = self.page.locator(f'{self.PRIVILEGES_TABLE} >> thead >> th').all()
+        # Get all table headers to find the column index (use correct privileges table)
+        privileges_table = self._find_privileges_table()
+        all_headers = privileges_table.locator('thead >> th').all()
         role_column_index = None
         
         for idx, header in enumerate(all_headers):
