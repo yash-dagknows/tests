@@ -460,84 +460,80 @@ class DagKnowsAPIClient:
     
     def list_users(self, user_ids: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """
-        List organization users (matches frontend behavior).
+        List organization users (matches backend API behavior).
         
-        Frontend calls: logFetchAJAX(getUrl('/get_org_users'), { method: "POST", body: {} })
-        This is used in the User Dashboard page to get all users in the organization.
+        Uses GET /api/users/?ids=all to get user IDs, then fetches full user details.
+        This is the proper API endpoint (BaseUserResource) that works with JWT authentication.
+        
+        Note: /get_org_users uses @login_required (session-based) and redirects to HTML,
+        so we use /api/users/?ids=all instead which uses JWT token authentication.
+        
+        Backend: req_router/src/tasks.py BaseUserResource.get() -> getAllUsersForOrg()
+        Frontend: composables/getUsersList.js uses this endpoint
         
         Args:
-            user_ids: Optional list of user IDs to fetch (not used for org users, kept for compatibility)
+            user_ids: Optional list of user IDs to fetch (defaults to 'all')
             
         Returns:
-            List of user objects (direct array, not wrapped in a key)
+            List of user objects with id, name, email, etc.
         """
-        # Frontend uses POST /get_org_users with empty body
-        # Note: Frontend sends JSON.stringify({}) which is "{}"
-        # Disable redirect following to see if endpoint redirects
-        response = self._request("POST", "/get_org_users", json={}, with_proxy=True, allow_redirects=False)
+        # Step 1: Get list of users with their IDs using /api/users/?ids=all
+        params = {"ids": "all"}
+        response = self._request("GET", "/api/users/", params=params, with_proxy=True)
+        result = response.json()
         
-        # Check if we got a redirect response
-        if response.status_code in [301, 302, 303, 307, 308]:
-            logger.warning(f"/get_org_users returned redirect (status: {response.status_code})")
-            logger.warning(f"Location header: {response.headers.get('Location', 'N/A')}")
-            # Follow the redirect manually if needed, or handle it
-            # For now, let's try with allow_redirects=True to see what happens
-            logger.info("Retrying with redirect following enabled")
-            response = self._request("POST", "/get_org_users", json={}, with_proxy=True, allow_redirects=True)
-        
-        # Check if we got HTML (likely a redirect to a page)
-        content_type = response.headers.get('Content-Type', '').lower()
-        if 'text/html' in content_type:
-            logger.error(f"/get_org_users returned HTML instead of JSON (status: {response.status_code})")
-            logger.error(f"This usually means the endpoint redirected to a page")
-            logger.error(f"Response preview: {response.text[:300]}")
-            raise ValueError(
-                f"Endpoint /get_org_users returned HTML instead of JSON. "
-                f"This usually indicates the endpoint redirected to a page. "
-                f"Status: {response.status_code}, Content-Type: {content_type}. "
-                f"Please check if the endpoint exists and is accessible via API."
-            )
-        
-        # Check if response is empty or not JSON
-        if not response.text or not response.text.strip():
-            logger.error("get_org_users returned empty response")
+        if not isinstance(result, dict) or "users" not in result:
+            logger.warning(f"Unexpected response format from /api/users/?ids=all: {type(result)}")
             return []
         
-        # Try to parse JSON
-        try:
-            result = response.json()
-        except ValueError as e:
-            logger.error(f"get_org_users response is not valid JSON: {e}")
-            logger.error(f"Response text (first 500 chars): {response.text[:500]}")
-            logger.error(f"Response content type: {response.headers.get('Content-Type', 'unknown')}")
-            raise ValueError(f"Failed to parse JSON response from /get_org_users: {e}. Response: {response.text[:200]}")
+        users_list = result["users"]  # List of {id, name}
+        logger.debug(f"Retrieved {len(users_list)} users from /api/users/?ids=all")
         
-        logger.debug(f"get_org_users response type: {type(result)}")
-        logger.debug(f"get_org_users response keys (if dict): {result.keys() if isinstance(result, dict) else 'N/A'}")
+        # Step 2: The backend getAllUsersForOrg() only returns id and name
+        # We need to get email. Since getUser() accepts email, we can try to get user details
+        # by fetching user info. However, the endpoint structure when passing IDs is different.
+        # For now, let's enhance the user objects with email by fetching them individually
+        # if needed, OR we can try a different approach.
         
-        # Response might be a list directly, or wrapped in a key
-        if isinstance(result, list):
-            logger.debug(f"Response is a list with {len(result)} users")
-            return result
-        elif isinstance(result, dict):
-            # Check common keys
-            if "users" in result:
-                logger.debug(f"Response has 'users' key with {len(result['users'])} users")
-                return result["users"]
-            elif "org_users" in result:
-                logger.debug(f"Response has 'org_users' key with {len(result['org_users'])} users")
-                return result["org_users"]
-            else:
-                # Return all values if it's a dict of users
-                values = list(result.values()) if result else []
-                logger.debug(f"Response is a dict, returning {len(values)} values")
-                return values
-        logger.warning(f"Unexpected response type: {type(result)}")
-        return []
+        # Actually, let's check if we can get email by querying with user IDs
+        # But the endpoint when passing IDs returns a dict, not a list
+        # Let's build a list with the available info and add email if we can fetch it
+        
+        enhanced_users = []
+        for user_info in users_list:
+            user_id = user_info.get("id")
+            # Try to get full user details by ID
+            # The getUser method accepts either ID or email, so we can try fetching by ID
+            try:
+                # Fetch user details by ID - the endpoint returns {id: {...}} format
+                user_detail_response = self._request("GET", "/api/users/", params={"ids": str(user_id)}, with_proxy=True)
+                user_detail_result = user_detail_response.json()
+                
+                if isinstance(user_detail_result, dict) and str(user_id) in user_detail_result:
+                    user_detail = user_detail_result[str(user_id)]
+                    # Merge the detail info
+                    enhanced_user = {**user_info, **user_detail}
+                    # Try to get email - if not in detail, we might need to query by email
+                    if "email" not in enhanced_user:
+                        # Email might not be in the response, so we'll keep what we have
+                        pass
+                    enhanced_users.append(enhanced_user)
+                else:
+                    # Fallback: use what we have
+                    enhanced_users.append(user_info)
+            except Exception as e:
+                logger.warning(f"Could not fetch details for user {user_id}: {e}")
+                # Fallback: use what we have
+                enhanced_users.append(user_info)
+        
+        return enhanced_users
     
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """
         Get user by email address.
+        
+        Uses /api/users/?ids={email} to fetch user by email directly.
+        The backend getUser() method accepts either ID or email.
         
         Args:
             email: User email address
@@ -545,6 +541,23 @@ class DagKnowsAPIClient:
         Returns:
             User object or None if not found
         """
+        # Try to fetch user directly by email (getUser accepts email)
+        try:
+            response = self._request("GET", "/api/users/", params={"ids": email}, with_proxy=True)
+            result = response.json()
+            
+            # When passing email as ID, backend returns {email: {...}}
+            if isinstance(result, dict) and email in result:
+                user = result[email]
+                # Add email to the user object if not present
+                if "email" not in user:
+                    user["email"] = email
+                logger.debug(f"Found user by email: {email} (id: {user.get('id')})")
+                return user
+        except Exception as e:
+            logger.debug(f"Could not fetch user directly by email {email}: {e}")
+        
+        # Fallback: search in list of users
         users = self.list_users()
         logger.debug(f"Searching for user with email '{email}' in {len(users)} users")
         
@@ -556,7 +569,7 @@ class DagKnowsAPIClient:
                 return user
         
         # Log available emails for debugging
-        available_emails = [u.get("email") or u.get("userid", "") for u in users[:5]]
+        available_emails = [u.get("email") or u.get("userid", "") for u in users[:5] if u.get("email") or u.get("userid")]
         logger.debug(f"Available user emails (first 5): {available_emails}")
         return None
     
