@@ -1615,7 +1615,13 @@ class SettingsPage(BasePage):
     def assign_role_to_user_for_workspace(self, workspace_name: str, role_name: str, user_email: str = None) -> None:
         """
         Assign a role to a user for a specific workspace in the Modify User Settings form.
-        The dropdown is in the 2nd column of the Credentials table.
+        The dropdown is in the 2nd column of the dkroles_table (Workspace Roles table).
+        
+        Based on frontend code:
+        - Table class: 'dkroles_table'
+        - Workspace name is in: td.space_title_td (1st column)
+        - Dropdown is in: td.hidden_dkrole_container (2nd column)
+        - Dropdown class: 'class_dkrole_dropdown'
         
         Args:
             workspace_name: Name of the workspace (e.g., "DEV")
@@ -1627,12 +1633,19 @@ class SettingsPage(BasePage):
             logger.info(f"User: {user_email}")
         self.screenshot(f"before-assign-role-{workspace_name}-{role_name}")
         
-        # Find the workspace row in the Credentials table (the table with workspace names)
-        # Look for the row containing the workspace name
+        # Find the dkroles_table (Workspace Roles table)
+        dkroles_table = self.page.locator('table.dkroles_table').first
+        if dkroles_table.count() == 0:
+            self.screenshot("dkroles-table-not-found")
+            raise Exception("Could not find Workspace Roles table (dkroles_table)")
+        
+        logger.info("✓ Found Workspace Roles table")
+        
+        # Find the workspace row - workspace name is in td.space_title_td
         workspace_row_selectors = [
-            f'tr:has-text("{workspace_name}")',
-            f'//tr[contains(., "{workspace_name}")]',
-            f'table:has-text("Credentials") >> tr:has-text("{workspace_name}")',
+            f'table.dkroles_table >> tr:has(td.space_title_td:has-text("{workspace_name}"))',
+            f'table.dkroles_table >> tr >> td.space_title_td:has-text("{workspace_name}") >> ..',
+            f'//table[contains(@class, "dkroles_table")]//tr[.//td[contains(@class, "space_title_td") and contains(text(), "{workspace_name}")]]',
         ]
         
         workspace_row = None
@@ -1650,106 +1663,75 @@ class SettingsPage(BasePage):
         
         if not workspace_row:
             self.screenshot(f"workspace-row-{workspace_name}-not-found")
-            raise Exception(f"Could not find workspace '{workspace_name}' in Credentials table")
+            raise Exception(f"Could not find workspace '{workspace_name}' in Workspace Roles table")
         
         # Scroll to the workspace row
         workspace_row.scroll_into_view_if_needed()
         self.page.wait_for_timeout(500)
         logger.info(f"✓ Found workspace '{workspace_name}' row")
         
-        # Get all cells in the workspace row
-        row_cells = workspace_row.locator('td').all()
-        logger.info(f"Found {len(row_cells)} columns in workspace row")
-        
-        if len(row_cells) < 2:
-            self.screenshot(f"workspace-row-insufficient-columns-{workspace_name}")
-            raise Exception(f"Workspace row for '{workspace_name}' has less than 2 columns")
-        
-        # The dropdown is in the 2nd column (index 1, 0-indexed)
-        second_column = row_cells[1]
-        logger.info("Looking for dropdown in 2nd column")
-        
-        # Find the dropdown/button in the 2nd column
+        # Find the dropdown in the 2nd column (td.hidden_dkrole_container)
+        # The dropdown has class 'class_dkrole_dropdown'
         dropdown_selectors = [
-            'select',
-            '[role="combobox"]',
-            'input[type="text"]',
-            'button',
-            '[class*="dropdown"]',
-            '[class*="select"]',
+            f'table.dkroles_table >> tr:has(td.space_title_td:has-text("{workspace_name}")) >> td.hidden_dkrole_container >> select.class_dkrole_dropdown',
+            f'table.dkroles_table >> tr:has(td.space_title_td:has-text("{workspace_name}")) >> td.hidden_dkrole_container >> select',
+            f'//table[contains(@class, "dkroles_table")]//tr[.//td[contains(@class, "space_title_td") and contains(text(), "{workspace_name}")]]//td[contains(@class, "hidden_dkrole_container")]//select[contains(@class, "class_dkrole_dropdown")]',
         ]
         
         role_dropdown = None
         for selector in dropdown_selectors:
             try:
-                locator = second_column.locator(selector)
+                locator = self.page.locator(selector)
                 if locator.count() > 0:
                     element = locator.first
                     if element.is_visible(timeout=2000):
                         role_dropdown = element
-                        logger.info(f"Found role dropdown in 2nd column with selector: {selector}")
+                        logger.info(f"Found role dropdown with selector: {selector}")
                         break
             except Exception as e:
-                logger.debug(f"Dropdown selector '{selector}' in 2nd column failed: {e}")
+                logger.debug(f"Dropdown selector '{selector}' failed: {e}")
                 continue
         
         if not role_dropdown:
             self.screenshot(f"role-dropdown-{workspace_name}-not-found")
-            raise Exception(f"Could not find role dropdown in 2nd column for workspace '{workspace_name}'")
+            raise Exception(f"Could not find role dropdown for workspace '{workspace_name}'")
         
         # Click the dropdown to open it
         role_dropdown.scroll_into_view_if_needed()
         self.page.wait_for_timeout(300)
         role_dropdown.click()
         self.page.wait_for_timeout(1000)  # Wait for dropdown menu to appear
-        logger.info("✓ Clicked role dropdown in 2nd column")
+        logger.info("✓ Clicked role dropdown")
         self.screenshot(f"role-dropdown-opened-{workspace_name}")
         
-        # Select the role from the dropdown
-        role_option_selectors = [
-            f'option:has-text("{role_name}")',
-            f'[role="option"]:has-text("{role_name}")',
-            f'//option[contains(text(), "{role_name}")]',
-            f'//div[@role="option" and contains(text(), "{role_name}")]',
-            f'text={role_name}',
-            f'//li[contains(text(), "{role_name}")]',
-        ]
-        
-        role_selected = False
-        for selector in role_option_selectors:
-            try:
-                locator = self.page.locator(selector)
-                if locator.count() > 0:
-                    # Try all matching elements
-                    for idx in range(locator.count()):
-                        element = locator.nth(idx)
+        # Select the role from the dropdown (it's a <select> element, so use select_option)
+        try:
+            role_dropdown.select_option(label=role_name)
+            role_selected = True
+            logger.info(f"✓ Selected role '{role_name}' using select_option")
+        except Exception as e:
+            logger.debug(f"select_option failed: {e}, trying alternative methods")
+            # Fallback: try clicking option element
+            role_option_selectors = [
+                f'select.class_dkrole_dropdown >> option:has-text("{role_name}")',
+                f'select.class_dkrole_dropdown >> option[value="{role_name}"]',
+                f'//select[contains(@class, "class_dkrole_dropdown")]//option[contains(text(), "{role_name}")]',
+            ]
+            
+            role_selected = False
+            for selector in role_option_selectors:
+                try:
+                    locator = self.page.locator(selector)
+                    if locator.count() > 0:
+                        element = locator.first
                         if element.is_visible(timeout=2000):
-                            element.scroll_into_view_if_needed()
-                            self.page.wait_for_timeout(300)
                             element.click()
                             role_selected = True
-                            logger.info(f"✓ Selected role '{role_name}' with selector: {selector} (element {idx})")
+                            logger.info(f"✓ Selected role '{role_name}' with selector: {selector}")
                             break
-                    if role_selected:
-                        break
-            except Exception as e:
-                logger.debug(f"Role option selector '{selector}' failed: {e}")
-                continue
-        
-        if not role_selected:
-            # Fallback: try typing the role name if it's an input
-            try:
-                tag_name = role_dropdown.evaluate("el => el.tagName.toLowerCase()")
-                input_type = role_dropdown.get_attribute('type')
-                if tag_name == 'input' or input_type == 'text':
-                    role_dropdown.fill(role_name)
-                    self.page.wait_for_timeout(500)
-                    # Press Enter to confirm
-                    role_dropdown.press("Enter")
-                    role_selected = True
-                    logger.info(f"✓ Typed and selected role '{role_name}'")
-            except Exception as e:
-                logger.debug(f"Fallback typing failed: {e}")
+                except Exception as e2:
+                    logger.debug(f"Role option selector '{selector}' failed: {e2}")
+                    continue
         
         if not role_selected:
             self.screenshot(f"role-option-{role_name}-not-found")
@@ -1779,13 +1761,16 @@ class SettingsPage(BasePage):
         logger.info("✓ Scrolled down to find Save Changes button")
         
         # Find and click the Save Changes button
+        # Based on frontend: button has class 'btn btn-primary btn-submit save-btn'
+        # Text is "Save Changes" with checkmark icon
         save_button_selectors = [
-            self.SAVE_CHANGES_BUTTON,
+            'button.btn-submit:has-text("Save Changes")',
+            'button.save-btn:has-text("Save Changes")',
+            'button.btn-primary:has-text("Save Changes")',
+            '.form-actions >> button:has-text("Save Changes")',
+            'button[type="submit"]:has-text("Save Changes")',
             'button:has-text("Save Changes")',
             'button:has-text("Save")',
-            'button[type="submit"]:has-text("Save")',
-            'button.btn-primary:has-text("Save Changes")',
-            'button:has([class*="check"]):has-text("Save")',  # Button with checkmark icon
         ]
         
         save_clicked = False
