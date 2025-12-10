@@ -1633,8 +1633,13 @@ class SettingsPage(BasePage):
             logger.info(f"User: {user_email}")
         self.screenshot(f"before-assign-role-{workspace_name}-{role_name}")
         
-        # Find the workspace row directly - workspace name is in td.space_title_td
-        # Try multiple selectors to find the workspace row
+        # Wait for the form to fully load
+        self.page.wait_for_load_state("networkidle", timeout=10000)
+        self.page.wait_for_timeout(2000)  # Additional wait for dynamic content
+        
+        # Find the workspace row - it's in the "Credentials" section (dkroles_table)
+        # The workspace name is in the first column (td.space_title_td)
+        # The dropdown is in the second column (td.hidden_dkrole_container)
         workspace_row_selectors = [
             f'table.dkroles_table >> tr:has(td.space_title_td:has-text("{workspace_name}"))',
             f'table.dkroles_table >> tr >> td.space_title_td:has-text("{workspace_name}") >> ..',
@@ -1643,13 +1648,15 @@ class SettingsPage(BasePage):
         ]
         
         workspace_row = None
+        workspace_row_selector = None
         for selector in workspace_row_selectors:
             try:
                 locator = self.page.locator(selector)
                 if locator.count() > 0:
                     workspace_row = locator.first
-                    # Wait for it to be attached to DOM, but don't require visibility yet
-                    workspace_row.wait_for(state="attached", timeout=5000)
+                    # Wait for it to be attached to DOM
+                    workspace_row.wait_for(state="attached", timeout=10000)
+                    workspace_row_selector = selector
                     logger.info(f"Found workspace row with selector: {selector}")
                     break
             except Exception as e:
@@ -1658,27 +1665,78 @@ class SettingsPage(BasePage):
         
         if not workspace_row:
             self.screenshot(f"workspace-row-{workspace_name}-not-found")
-            raise Exception(f"Could not find workspace '{workspace_name}' in Workspace Roles table")
+            raise Exception(f"Could not find workspace '{workspace_name}' in Credentials table")
         
         logger.info(f"✓ Found workspace '{workspace_name}' row")
         
-        # Try to scroll to the workspace row (but don't fail if it times out)
+        # Try to scroll to the table and workspace row
+        try:
+            dkroles_table = self.page.locator('table.dkroles_table').first
+            if dkroles_table.count() > 0:
+                dkroles_table.scroll_into_view_if_needed(timeout=5000)
+                self.page.wait_for_timeout(500)
+        except Exception as e:
+            logger.warning(f"Could not scroll to dkroles_table: {e}")
+        
         try:
             workspace_row.scroll_into_view_if_needed(timeout=5000)
-            self.page.wait_for_timeout(300)
+            self.page.wait_for_timeout(500)
         except Exception as e:
             logger.warning(f"Could not scroll workspace row into view: {e}, continuing anyway")
-            self.page.wait_for_timeout(300)
+            self.page.wait_for_timeout(500)
         
-        # Find the dropdown in the 2nd column (td.hidden_dkrole_container)
+        # Find the dropdown in the 2nd column of the workspace row
+        # The dropdown is in td.hidden_dkrole_container (2nd column)
         # The dropdown has class 'class_dkrole_dropdown'
-        dropdown_selectors = [
-            f'table.dkroles_table >> tr:has(td.space_title_td:has-text("{workspace_name}")) >> td.hidden_dkrole_container >> select.class_dkrole_dropdown',
-            f'table.dkroles_table >> tr:has(td.space_title_td:has-text("{workspace_name}")) >> td.hidden_dkrole_container >> select',
-            f'//table[contains(@class, "dkroles_table")]//tr[.//td[contains(@class, "space_title_td") and contains(text(), "{workspace_name}")]]//td[contains(@class, "hidden_dkrole_container")]//select[contains(@class, "class_dkrole_dropdown")]',
-            f'tr:has-text("{workspace_name}") >> td.hidden_dkrole_container >> select.class_dkrole_dropdown',
-            f'tr:has-text("{workspace_name}") >> td >> select',
-        ]
+        # Strategy: Get the workspace row, then get its 2nd column (td), then find select in it
+        role_dropdown = None
+        
+        # First, try to get the dropdown directly from the workspace row's 2nd column
+        try:
+            logger.info("Trying to find dropdown in 2nd column of workspace row")
+            row_cells = workspace_row.locator('td').all()
+            logger.info(f"Found {len(row_cells)} cells in workspace row")
+            if len(row_cells) >= 2:
+                second_cell = row_cells[1]  # 2nd column (index 1)
+                # Look for select in the second cell
+                select_in_cell = second_cell.locator('select.class_dkrole_dropdown').first
+                if select_in_cell.count() == 0:
+                    select_in_cell = second_cell.locator('select').first
+                if select_in_cell.count() > 0:
+                    select_in_cell.wait_for(state="attached", timeout=10000)
+                    role_dropdown = select_in_cell
+                    logger.info("✓ Found dropdown by accessing 2nd column directly from workspace row")
+        except Exception as e:
+            logger.debug(f"Direct column access failed: {e}")
+        
+        # If direct access didn't work, try selectors
+        if not role_dropdown:
+            dropdown_selectors = []
+            
+            # If we have the workspace_row_selector, use it first
+            if workspace_row_selector:
+                dropdown_selectors.extend([
+                    f'{workspace_row_selector} >> td.hidden_dkrole_container >> select.class_dkrole_dropdown',
+                    f'{workspace_row_selector} >> td.hidden_dkrole_container >> select',
+                    f'{workspace_row_selector} >> td:nth-child(2) >> select.class_dkrole_dropdown',
+                    f'{workspace_row_selector} >> td:nth-child(2) >> select',
+                ])
+            
+            # Add other selectors
+            dropdown_selectors.extend([
+                # Try with table context
+                f'table.dkroles_table >> tr:has(td.space_title_td:has-text("{workspace_name}")) >> td.hidden_dkrole_container >> select.class_dkrole_dropdown',
+                f'table.dkroles_table >> tr:has(td.space_title_td:has-text("{workspace_name}")) >> td.hidden_dkrole_container >> select',
+                f'table.dkroles_table >> tr:has(td.space_title_td:has-text("{workspace_name}")) >> td:nth-child(2) >> select.class_dkrole_dropdown',
+                f'table.dkroles_table >> tr:has(td.space_title_td:has-text("{workspace_name}")) >> td:nth-child(2) >> select',
+                # Try XPath
+                f'//table[contains(@class, "dkroles_table")]//tr[.//td[contains(@class, "space_title_td") and contains(text(), "{workspace_name}")]]//td[contains(@class, "hidden_dkrole_container")]//select[contains(@class, "class_dkrole_dropdown")]',
+                # Simpler fallbacks
+                f'tr:has-text("{workspace_name}") >> td.hidden_dkrole_container >> select.class_dkrole_dropdown',
+                f'tr:has-text("{workspace_name}") >> td:nth-child(2) >> select.class_dkrole_dropdown',
+                f'tr:has-text("{workspace_name}") >> td >> select.class_dkrole_dropdown',
+                f'tr:has-text("{workspace_name}") >> td >> select',
+            ])
         
         role_dropdown = None
         for selector in dropdown_selectors:
@@ -1686,18 +1744,58 @@ class SettingsPage(BasePage):
                 locator = self.page.locator(selector)
                 if locator.count() > 0:
                     element = locator.first
-                    # Wait for element to be attached, then check visibility
+                    # Wait for element to be attached (even if hidden)
                     element.wait_for(state="attached", timeout=5000)
-                    if element.is_visible(timeout=2000):
+                    # Check if it exists in DOM (even if hidden)
+                    try:
+                        is_attached = element.evaluate("el => el !== null")
+                        if is_attached:
+                            # If hidden, try to make it visible or use it anyway
+                            is_visible = element.is_visible(timeout=1000)
+                            if not is_visible:
+                                logger.info(f"Dropdown found but hidden, trying to make visible")
+                                # Try to remove display:none style
+                                try:
+                                    element.evaluate("el => { if (el.style.display === 'none') el.style.display = 'block'; }")
+                                    self.page.wait_for_timeout(300)
+                                except Exception:
+                                    pass
+                            role_dropdown = element
+                            logger.info(f"Found role dropdown with selector: {selector} (visible: {is_visible})")
+                            break
+                    except Exception as eval_error:
+                        logger.debug(f"Error evaluating element: {eval_error}, trying anyway")
                         role_dropdown = element
-                        logger.info(f"Found role dropdown with selector: {selector}")
+                        logger.info(f"Found role dropdown with selector: {selector} (using anyway)")
                         break
             except Exception as e:
                 logger.debug(f"Dropdown selector '{selector}' failed: {e}")
                 continue
         
         if not role_dropdown:
+            # Last resort: try to find any select in the workspace row's second column
+            try:
+                logger.info("Trying last resort: accessing second cell directly from workspace row")
+                row_cells = workspace_row.locator('td').all()
+                logger.info(f"Found {len(row_cells)} cells in workspace row")
+                if len(row_cells) >= 2:
+                    second_cell = row_cells[1]
+                    select_in_cell = second_cell.locator('select').first
+                    if select_in_cell.count() > 0:
+                        select_in_cell.wait_for(state="attached", timeout=5000)
+                        role_dropdown = select_in_cell
+                        logger.info("✓ Found dropdown by accessing second cell directly")
+            except Exception as e:
+                logger.debug(f"Last resort dropdown search failed: {e}")
+        
+        if not role_dropdown:
             self.screenshot(f"role-dropdown-{workspace_name}-not-found")
+            # Log more debug info
+            try:
+                table_html = self.page.locator('table.dkroles_table').first.inner_html()
+                logger.debug(f"dkroles_table HTML (first 500 chars): {table_html[:500]}")
+            except Exception:
+                pass
             raise Exception(f"Could not find role dropdown for workspace '{workspace_name}'")
         
         # Scroll to the dropdown and select the role (it's a <select> element, so use select_option)
