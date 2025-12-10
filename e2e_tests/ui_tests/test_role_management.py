@@ -85,51 +85,53 @@ class TestRoleManagementE2E:
         role_name = f"read1_{timestamp}"
         logger.info(f"Test role name: {role_name}")
         
-        # Step 4: Navigate to Settings -> RBAC tab
-        logger.info("Step 4: Navigating to Settings -> RBAC tab")
+        # Step 4: Navigate to Settings page
+        logger.info("Step 4: Navigating to Settings page")
         settings_page = SettingsPage(page)
-        settings_page.navigate_to_rbac_tab()
+        settings_page.navigate_to_settings_page()
+        logger.info(f"✓ On settings page: {page.url}")
+        settings_page.screenshot("04-role-settings-page")
         
-        # Verify we're on RBAC tab
-        current_url = page.url
-        assert "tab=rbac" in current_url, f"Should be on RBAC tab, but URL is: {current_url}"
-        logger.info(f"✓ On RBAC tab: {current_url}")
-        settings_page.screenshot("04-role-rbac-tab")
+        # Step 5: Click Workspaces tab on the top horizontal strip
+        logger.info("Step 5: Clicking Workspaces tab on settings page")
+        settings_page.click_workspaces_tab()
+        logger.info(f"✓ Workspaces tab clicked: {page.url}")
+        settings_page.screenshot("05-role-workspaces-tab")
         
-        # Step 5: Scroll down to "Create new custom role" section
-        logger.info("Step 5: Scrolling to 'Create new custom role' section")
+        # Step 6: Scroll down to "Create new custom role" section
+        logger.info("Step 6: Scrolling to 'Create new custom role' section")
         settings_page.scroll_to_create_custom_role_section()
         logger.info("✓ Scrolled to create custom role section")
-        settings_page.screenshot("05-role-create-section-visible")
+        settings_page.screenshot("06-role-create-section-visible")
         
-        # Step 6: Create custom role
-        logger.info(f"Step 6: Creating custom role '{role_name}'")
+        # Step 7: Create custom role
+        logger.info(f"Step 7: Creating custom role '{role_name}'")
         settings_page.create_custom_role(role_name)
         logger.info(f"✓ Custom role '{role_name}' created")
         settings_page.screenshot("06-role-created")
         
-        # Step 7: Scroll to privileges table (role appears in table below)
-        logger.info("Step 7: Scrolling to privileges table where role will appear")
+        # Step 8: Scroll to privileges table (role appears in table below)
+        logger.info("Step 8: Scrolling to privileges table where role will appear")
         settings_page.scroll_to_privileges_table()
         logger.info("✓ Scrolled to privileges table")
-        settings_page.screenshot("07-role-privileges-table-visible")
+        settings_page.screenshot("08-role-privileges-table-visible")
         
-        # Step 8: Verify role appears in privileges table AND scroll horizontally to find it
+        # Step 9: Verify role appears in privileges table AND scroll horizontally to find it
         # IMPORTANT: After role creation, the role column is added to the right side of the table
         # and requires horizontal scrolling to be visible
-        logger.info(f"Step 8: Verifying role '{role_name}' appears in privileges table")
+        logger.info(f"Step 9: Verifying role '{role_name}' appears in privileges table")
         logger.info("Note: Will scroll horizontally to find the role column (new roles appear on the right)")
         settings_page.verify_role_in_privileges_table(role_name, timeout=30000)  # Increased to 30 seconds
         logger.info(f"✓ Role '{role_name}' found in privileges table")
-        settings_page.screenshot("08-role-in-table")
+        settings_page.screenshot("09-role-in-table")
         
-        # Step 9: Ensure role column is visible (scroll horizontally if needed)
-        logger.info(f"Step 9: Ensuring role column '{role_name}' is visible (horizontal scroll if needed)")
+        # Step 10: Ensure role column is visible (scroll horizontally if needed)
+        logger.info(f"Step 10: Ensuring role column '{role_name}' is visible (horizontal scroll if needed)")
         settings_page.scroll_horizontally_to_role_column(role_name)
         logger.info(f"✓ Role column '{role_name}' is visible")
-        settings_page.screenshot("09-role-column-visible")
+        settings_page.screenshot("10-role-column-visible")
         
-        # Step 10: Assign privileges to the role
+        # Step 11: Assign privileges to the role
         privileges_to_assign = [
             "task.view_code",
             "task.view_io",
@@ -148,8 +150,8 @@ class TestRoleManagementE2E:
         logger.info(f"✓ All {len(privileges_to_assign)} privileges assigned to role '{role_name}'")
         settings_page.screenshot("10-role-all-privileges-assigned")
         
-        # Step 11: Verify privileges are assigned (check that checkboxes are checked)
-        logger.info("Step 11: Verifying privileges are assigned")
+        # Step 12: Verify privileges are assigned (check that checkboxes are checked)
+        logger.info("Step 12: Verifying privileges are assigned")
         for privilege in privileges_to_assign:
             try:
                 # Find the privilege row

@@ -642,23 +642,79 @@ class SettingsPage(BasePage):
     ROLE_COLUMN_HEADER = 'th:has-text("{role_name}")'  # Column header for a role
     PRIVILEGE_CHECKBOX = 'tr:has-text("{privilege_name}") >> td >> input[type="checkbox"]'  # Checkbox in privilege row
     
-    def navigate_to_rbac_tab(self) -> None:
+    def navigate_to_settings_page(self) -> None:
         """
-        Navigate directly to RBAC tab via URL.
-        The RBAC content is shown when tab=rbac is in the URL.
+        Navigate to the main settings page (without any tab parameter).
         """
-        logger.info("Navigating to RBAC tab")
-        rbac_url = f"{self.settings_url}?tab=rbac"
-        self.goto(rbac_url)
+        logger.info("Navigating to settings page")
+        self.goto(self.settings_url)
         self.page.wait_for_load_state("networkidle", timeout=10000)
         self.page.wait_for_timeout(2000)  # Give time for content to load
-        self.screenshot("rbac-tab-loaded")
-        logger.info("✓ RBAC tab loaded")
+        self.screenshot("settings-page-loaded")
+        logger.info("✓ Settings page loaded")
         
-        # Verify we're on RBAC tab
+        # Verify we're on settings page
+        current_url = self.page.url
+        if "/vsettings" not in current_url:
+            logger.warning(f"URL does not contain '/vsettings'. Current URL: {current_url}")
+    
+    def click_workspaces_tab(self) -> None:
+        """
+        Click the "Workspaces" tab on the settings page.
+        This tab shows the RBAC content including "Create new custom role" section.
+        """
+        logger.info("Clicking Workspaces tab on settings page")
+        self.screenshot("before-workspaces-tab-click")
+        
+        # Try multiple selectors for the Workspaces tab
+        workspaces_tab_selectors = [
+            self.WORKSPACES_TAB,
+            'button:has-text("Workspaces")',
+            '[role="tab"]:has-text("Workspaces")',
+            'div[role="tablist"] >> text=Workspaces',
+            '//button[contains(text(), "Workspaces")]',
+        ]
+        
+        clicked = False
+        for selector in workspaces_tab_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    element = locator.first
+                    element.scroll_into_view_if_needed()
+                    element.wait_for(state="visible", timeout=5000)
+                    element.click()
+                    clicked = True
+                    logger.info(f"✓ Clicked Workspaces tab with selector: {selector}")
+                    break
+            except Exception as e:
+                logger.debug(f"Could not click Workspaces tab with {selector}: {e}")
+        
+        if not clicked:
+            self.screenshot("workspaces-tab-not-found")
+            raise Exception("Could not find or click Workspaces tab")
+        
+        # Wait for tab content to load
+        self.page.wait_for_load_state("networkidle", timeout=10000)
+        self.page.wait_for_timeout(2000)  # Give time for content to load
+        self.screenshot("after-workspaces-tab-click")
+        logger.info("✓ Workspaces tab clicked and content loaded")
+        
+        # Verify URL contains tab=rbac (Workspaces tab sets this)
         current_url = self.page.url
         if "tab=rbac" not in current_url:
-            logger.warning(f"URL does not contain 'tab=rbac'. Current URL: {current_url}")
+            logger.info(f"URL after clicking Workspaces tab: {current_url}")
+            # URL might not have tab=rbac, but content should be loaded
+    
+    def navigate_to_rbac_tab(self) -> None:
+        """
+        Navigate to RBAC tab by going to settings and clicking Workspaces tab.
+        Alternative: Navigate directly to RBAC tab via URL.
+        """
+        logger.info("Navigating to RBAC tab via Workspaces tab")
+        self.navigate_to_settings_page()
+        self.click_workspaces_tab()
+        logger.info("✓ RBAC tab loaded (via Workspaces tab)")
     
     def scroll_to_create_custom_role_section(self) -> None:
         """Scroll down to the 'Create new custom role' section."""
@@ -694,12 +750,21 @@ class SettingsPage(BasePage):
         logger.info(f"Creating custom role: {role_name}")
         self.screenshot(f"before-create-role-{role_name}")
         
-        # Verify we're on RBAC tab
+        # Verify we're on settings page with Workspaces tab
         current_url = self.page.url
-        if "tab=rbac" not in current_url:
-            logger.warning(f"Not on RBAC tab! Current URL: {current_url}")
-            logger.info("Navigating to RBAC tab...")
-            self.navigate_to_rbac_tab()
+        if "/vsettings" not in current_url:
+            logger.warning(f"Not on settings page! Current URL: {current_url}")
+            logger.info("Navigating to settings page...")
+            self.navigate_to_settings_page()
+        
+        # If not on Workspaces tab, click it
+        # Check if Workspaces tab is active by looking for "Create new custom role" section
+        create_role_section = self.page.locator(self.CREATE_CUSTOM_ROLE_HEADING)
+        if create_role_section.count() == 0 or not create_role_section.first.is_visible(timeout=3000):
+            logger.info("Workspaces tab not active, clicking it...")
+            self.click_workspaces_tab()
+        else:
+            logger.info("Workspaces tab appears to be active (Create new custom role section visible)")
         
         # Scroll to the section first
         self.scroll_to_create_custom_role_section()
