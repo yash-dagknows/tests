@@ -1441,6 +1441,7 @@ class SettingsPage(BasePage):
     def expand_user_row(self, user_email: str) -> None:
         """
         Click the dropdown arrow next to a user to expand their row and show "Modify Settings" button.
+        The dropdown arrow is in the 4th column (rightmost) of the All Users table.
         
         Args:
             user_email: Email of the user
@@ -1451,35 +1452,105 @@ class SettingsPage(BasePage):
         # Find the user row first
         self.find_user_in_table(user_email)
         
-        # Find the dropdown arrow/button next to the user
-        dropdown_selectors = [
-            self.USER_DROPDOWN_ARROW.format(user_email=user_email),
-            f'tr:has-text("{user_email}") >> button:has([class*="chevron"])',
-            f'tr:has-text("{user_email}") >> button[aria-label*="expand"]',
-            f'tr:has-text("{user_email}") >> button[aria-label*="Expand"]',
-            f'tr:has-text("{user_email}") >> [aria-label*="expand"]',
-            f'//tr[contains(., "{user_email}")]//button[contains(@aria-label, "expand") or contains(@class, "chevron")]',
-        ]
+        # Find the user row
+        user_row_selector = self.USER_ROW.format(user_email=user_email)
+        user_row = self.page.locator(user_row_selector).first
+        
+        if user_row.count() == 0:
+            raise Exception(f"Could not find user row for '{user_email}'")
+        
+        # The dropdown arrow is in the 4th column (rightmost column) of the table
+        # Strategy 1: Find button/icon in the last column (4th column) of the row
+        logger.info("Looking for dropdown arrow in 4th column (rightmost) of user row")
+        
+        # Get all cells in the user row
+        row_cells = user_row.locator('td').all()
+        logger.info(f"Found {len(row_cells)} columns in user row")
         
         dropdown_clicked = False
-        for selector in dropdown_selectors:
-            try:
-                locator = self.page.locator(selector)
-                if locator.count() > 0:
-                    element = locator.first
-                    if element.is_visible(timeout=2000):
-                        element.scroll_into_view_if_needed()
+        
+        # Try clicking the last cell (4th column) or button in the last cell
+        if len(row_cells) >= 4:
+            last_cell = row_cells[3]  # 4th column (0-indexed: 0, 1, 2, 3)
+            logger.info("Trying to click button/icon in 4th column")
+            
+            # Look for button or clickable element in the last cell
+            cell_button_selectors = [
+                'button',
+                '[role="button"]',
+                'button[aria-label*="expand"]',
+                'button[aria-label*="Expand"]',
+                'button:has([class*="chevron"])',
+                'button:has([class*="arrow"])',
+                'button:has(svg)',
+                '[class*="chevron"]',
+                '[class*="arrow"]',
+            ]
+            
+            for selector in cell_button_selectors:
+                try:
+                    button = last_cell.locator(selector).first
+                    if button.count() > 0 and button.is_visible(timeout=2000):
+                        button.scroll_into_view_if_needed()
                         self.page.wait_for_timeout(300)
-                        element.click()
+                        button.click()
                         dropdown_clicked = True
-                        logger.info(f"✓ Clicked dropdown arrow with selector: {selector}")
+                        logger.info(f"✓ Clicked dropdown arrow in 4th column with selector: {selector}")
                         break
-            except Exception as e:
-                logger.debug(f"Dropdown selector '{selector}' failed: {e}")
-                continue
+                except Exception as e:
+                    logger.debug(f"Selector '{selector}' in 4th column failed: {e}")
+                    continue
+            
+            # If no button found, try clicking the cell itself
+            if not dropdown_clicked:
+                try:
+                    last_cell.scroll_into_view_if_needed()
+                    self.page.wait_for_timeout(300)
+                    last_cell.click()
+                    dropdown_clicked = True
+                    logger.info("✓ Clicked 4th column cell directly")
+                except Exception as e:
+                    logger.debug(f"Could not click 4th column cell: {e}")
+        
+        # Strategy 2: Find dropdown arrow using various selectors (fallback)
+        if not dropdown_clicked:
+            logger.info("Trying fallback selectors for dropdown arrow")
+            dropdown_selectors = [
+                f'{user_row_selector} >> td:last-child >> button',
+                f'{user_row_selector} >> td:nth-child(4) >> button',
+                f'{user_row_selector} >> button:has([class*="chevron"])',
+                f'{user_row_selector} >> button[aria-label*="expand"]',
+                f'{user_row_selector} >> button[aria-label*="Expand"]',
+                f'{user_row_selector} >> [aria-label*="expand"]',
+                f'//tr[contains(., "{user_email}")]//td[last()]//button',
+                f'//tr[contains(., "{user_email}")]//button[contains(@aria-label, "expand") or contains(@class, "chevron")]',
+            ]
+            
+            for selector in dropdown_selectors:
+                try:
+                    locator = self.page.locator(selector)
+                    if locator.count() > 0:
+                        element = locator.first
+                        if element.is_visible(timeout=2000):
+                            element.scroll_into_view_if_needed()
+                            self.page.wait_for_timeout(300)
+                            element.click()
+                            dropdown_clicked = True
+                            logger.info(f"✓ Clicked dropdown arrow with selector: {selector}")
+                            break
+                except Exception as e:
+                    logger.debug(f"Dropdown selector '{selector}' failed: {e}")
+                    continue
         
         if not dropdown_clicked:
             self.screenshot(f"user-dropdown-{user_email}-not-found")
+            # Log row structure for debugging
+            try:
+                row_text = user_row.text_content()
+                logger.error(f"User row content: {row_text}")
+                logger.error(f"Number of columns: {len(row_cells)}")
+            except Exception:
+                pass
             raise Exception(f"Could not find or click dropdown arrow for user '{user_email}'")
         
         # Wait for the row to expand and "Modify Settings" button to appear
