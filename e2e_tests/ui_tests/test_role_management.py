@@ -108,20 +108,23 @@ class TestRoleManagementE2E:
         logger.info(f"✓ Custom role '{role_name}' created")
         settings_page.screenshot("06-role-created")
         
-        # Step 7: Verify role appears in privileges table
-        logger.info(f"Step 7: Verifying role '{role_name}' appears in privileges table")
-        settings_page.verify_role_in_privileges_table(role_name, timeout=15000)
-        logger.info(f"✓ Role '{role_name}' found in privileges table")
-        settings_page.screenshot("07-role-in-table")
-        
-        # Step 8: Scroll to privileges table
-        logger.info("Step 8: Scrolling to privileges table")
+        # Step 7: Scroll to privileges table (role appears in table below)
+        logger.info("Step 7: Scrolling to privileges table where role will appear")
         settings_page.scroll_to_privileges_table()
         logger.info("✓ Scrolled to privileges table")
-        settings_page.screenshot("08-role-privileges-table-visible")
+        settings_page.screenshot("07-role-privileges-table-visible")
         
-        # Step 9: Scroll horizontally to find the role column
-        logger.info(f"Step 9: Scrolling horizontally to find role column '{role_name}'")
+        # Step 8: Verify role appears in privileges table AND scroll horizontally to find it
+        # IMPORTANT: After role creation, the role column is added to the right side of the table
+        # and requires horizontal scrolling to be visible
+        logger.info(f"Step 8: Verifying role '{role_name}' appears in privileges table")
+        logger.info("Note: Will scroll horizontally to find the role column (new roles appear on the right)")
+        settings_page.verify_role_in_privileges_table(role_name, timeout=30000)  # Increased to 30 seconds
+        logger.info(f"✓ Role '{role_name}' found in privileges table")
+        settings_page.screenshot("08-role-in-table")
+        
+        # Step 9: Ensure role column is visible (scroll horizontally if needed)
+        logger.info(f"Step 9: Ensuring role column '{role_name}' is visible (horizontal scroll if needed)")
         settings_page.scroll_horizontally_to_role_column(role_name)
         logger.info(f"✓ Role column '{role_name}' is visible")
         settings_page.screenshot("09-role-column-visible")

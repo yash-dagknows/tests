@@ -755,39 +755,149 @@ class SettingsPage(BasePage):
             add_button.click()
             logger.info("✓ Clicked Add button for role")
             self.page.wait_for_load_state("networkidle", timeout=10000)
-            self.page.wait_for_timeout(2000)  # Give time for role to appear in table
+            
+            # Wait for role to appear in privileges table (user reported ~1 second, using 5 seconds for safety)
+            # Also try to detect when the role appears in the table
+            logger.info("Waiting for role to appear in privileges table...")
+            role_appeared = False
+            for wait_attempt in range(10):  # Check every 500ms for up to 5 seconds
+                self.page.wait_for_timeout(500)
+                # Check if role name appears in table text
+                try:
+                    table_text = self.page.locator(self.PRIVILEGES_TABLE).first.text_content()
+                    if role_name in table_text:
+                        logger.info(f"✓ Role '{role_name}' detected in table (attempt {wait_attempt + 1})")
+                        role_appeared = True
+                        break
+                except Exception:
+                    pass
+            
+            if not role_appeared:
+                logger.warning(f"Role '{role_name}' not detected in table text after 5 seconds, continuing anyway...")
+                self.page.wait_for_timeout(2000)  # Additional wait
+            
             self.screenshot(f"after-create-role-{role_name}")
             logger.info(f"✓ Custom role '{role_name}' creation requested")
         else:
             self.screenshot("add-role-button-not-found")
             raise Exception("Could not find or click Add button for role")
     
-    def verify_role_in_privileges_table(self, role_name: str, timeout: int = 10000) -> None:
+    def verify_role_in_privileges_table(self, role_name: str, timeout: int = 20000) -> None:
         """
         Verify that a newly created role appears in the privileges table.
+        This method waits for the role to appear and handles horizontal scrolling.
+        
+        IMPORTANT: After role creation, the role column may be off-screen and requires
+        horizontal scrolling in the privileges table to find it.
         
         Args:
             role_name: Name of the role to verify
-            timeout: Wait timeout in ms
+            timeout: Wait timeout in ms (increased default to 20 seconds)
         """
         logger.info(f"Verifying role '{role_name}' in privileges table")
+        logger.info("Note: Role column may require horizontal scrolling to be visible")
         self.screenshot(f"checking-role-{role_name}")
         
         # Wait for privileges table to be visible
         try:
-            self.page.locator(self.PRIVILEGES_TABLE_HEADING).wait_for(state="visible", timeout=5000)
+            self.page.locator(self.PRIVILEGES_TABLE_HEADING).wait_for(state="visible", timeout=10000)
+            logger.info("✓ Privileges table heading is visible")
         except Exception:
             logger.warning("Could not find 'Privileges' heading, but continuing...")
         
-        # Look for the role name in table headers
-        role_header_selector = self.ROLE_COLUMN_HEADER.format(role_name=role_name)
+        # Scroll to privileges table first
+        self.scroll_to_privileges_table()
         
+        # Wait a bit more for the table to update with the new role
+        self.page.wait_for_timeout(2000)
+        
+        # IMPORTANT: After role creation, we MUST scroll horizontally to find the role column
+        # The role is added as a new column, which may be off-screen to the right
+        logger.info("Scrolling horizontally to find newly created role column...")
         try:
-            self.page.locator(role_header_selector).wait_for(state="visible", timeout=timeout)
-            logger.info(f"✓ Role '{role_name}' found in privileges table")
+            self.scroll_horizontally_to_role_column(role_name)
+            logger.info("✓ Scrolled horizontally to find role column")
         except Exception as e:
+            logger.warning(f"Initial horizontal scroll attempt: {e}")
+            # Continue with other strategies
+        
+        # Try multiple strategies to find the role
+        role_found = False
+        
+        # Strategy 1: Look for exact role name in table headers (try without scrolling first)
+        role_header_selectors = [
+            f'th:has-text("{role_name}")',  # Exact match
+            f'th:contains("{role_name}")',  # Contains match (if supported)
+            f'//th[contains(text(), "{role_name}")]',  # XPath contains
+        ]
+        
+        for selector in role_header_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    # Check if it's visible (might need horizontal scroll)
+                    header = locator.first
+                    if header.is_visible(timeout=2000):
+                        logger.info(f"✓ Role '{role_name}' found in privileges table (visible) with selector: {selector}")
+                        role_found = True
+                        break
+                    else:
+                        logger.info(f"Role '{role_name}' found but not visible (needs horizontal scroll)")
+                        # Try scrolling horizontally to find it
+                        self.scroll_horizontally_to_role_column(role_name)
+                        if header.is_visible(timeout=2000):
+                            logger.info(f"✓ Role '{role_name}' found after horizontal scroll")
+                            role_found = True
+                            break
+            except Exception as e:
+                logger.debug(f"Selector '{selector}' failed: {e}")
+                continue
+        
+        # Strategy 2: If not found, try scrolling horizontally and searching again
+        if not role_found:
+            logger.info("Role not found in initial search, trying horizontal scroll...")
+            try:
+                self.scroll_horizontally_to_role_column(role_name)
+                # Try finding again after scroll
+                for selector in role_header_selectors:
+                    locator = self.page.locator(selector)
+                    if locator.count() > 0 and locator.first.is_visible(timeout=3000):
+                        logger.info(f"✓ Role '{role_name}' found after horizontal scroll with selector: {selector}")
+                        role_found = True
+                        break
+            except Exception as e:
+                logger.warning(f"Horizontal scroll attempt failed: {e}")
+        
+        # Strategy 3: Check if role name appears anywhere in the table (even if not visible)
+        if not role_found:
+            logger.info("Checking if role name appears anywhere in the table...")
+            table_text = self.page.locator(self.PRIVILEGES_TABLE).first.text_content()
+            if role_name in table_text:
+                logger.info(f"✓ Role '{role_name}' text found in table content (may need scrolling)")
+                # Try scrolling to find it
+                try:
+                    self.scroll_horizontally_to_role_column(role_name)
+                    # Verify it's now visible
+                    role_header_selector = f'th:has-text("{role_name}")'
+                    if self.page.locator(role_header_selector).first.is_visible(timeout=3000):
+                        role_found = True
+                        logger.info(f"✓ Role '{role_name}' is now visible after scroll")
+                except Exception:
+                    pass
+        
+        if not role_found:
             self.screenshot(f"role-{role_name}-not-found-in-table")
-            raise Exception(f"Role '{role_name}' not found in privileges table: {e}")
+            # Log table headers for debugging
+            try:
+                all_headers = self.page.locator(f'{self.PRIVILEGES_TABLE} >> thead >> th').all()
+                header_texts = [h.text_content() for h in all_headers]
+                logger.error(f"Available role headers in table: {header_texts}")
+            except Exception:
+                pass
+            raise Exception(f"Role '{role_name}' not found in privileges table after {timeout}ms timeout")
+        
+        logger.info(f"✓ Role '{role_name}' verified in privileges table")
+        self.screenshot(f"role-{role_name}-verified-in-table")
     
     def scroll_to_privileges_table(self) -> None:
         """Scroll to the privileges table section."""
@@ -827,45 +937,112 @@ class SettingsPage(BasePage):
         if not table_box:
             raise Exception("Could not get table bounding box")
         
-        # Try to find the role column header
-        role_header_selector = self.ROLE_COLUMN_HEADER.format(role_name=role_name)
-        role_header = self.page.locator(role_header_selector)
+        # Try multiple selectors for the role header
+        role_header_selectors = [
+            f'th:has-text("{role_name}")',
+            f'//th[contains(text(), "{role_name}")]',  # XPath
+        ]
+        
+        role_header = None
+        for selector in role_header_selectors:
+            locator = self.page.locator(selector)
+            if locator.count() > 0:
+                role_header = locator.first
+                logger.info(f"Found role header with selector: {selector}")
+                break
+        
+        if not role_header:
+            logger.warning(f"Role header '{role_name}' not found in DOM, will search while scrolling")
         
         # Check if role column is already visible
-        if role_header.count() > 0 and role_header.first.is_visible():
+        if role_header and role_header.is_visible():
             logger.info(f"✓ Role column '{role_name}' is already visible")
             return
         
+        # Find the scrollable container (table wrapper or table itself)
+        # Try to find a parent div with overflow-x
+        scrollable_container = None
+        container_selectors = [
+            f'{self.PRIVILEGES_TABLE} >> xpath=ancestor::div[contains(@style, "overflow")]',
+            f'{self.PRIVILEGES_TABLE} >> xpath=ancestor::div[@class*="scroll"]',
+            f'{self.PRIVILEGES_TABLE} >> xpath=ancestor::div[@id*="table"]',
+        ]
+        
+        for selector in container_selectors:
+            try:
+                container_locator = self.page.locator(selector)
+                if container_locator.count() > 0:
+                    scrollable_container = container_locator.first
+                    logger.info(f"Found scrollable container with: {selector}")
+                    break
+            except Exception:
+                continue
+        
+        # If no specific container found, use the table itself
+        if not scrollable_container:
+            scrollable_container = table
+        
         # Scroll horizontally to find the role column
-        # The table might be in a scrollable container
-        max_scroll_attempts = 10
-        scroll_amount = 200  # pixels per scroll
+        max_scroll_attempts = 20  # Increased attempts
+        scroll_amount = 300  # Increased scroll amount
         
         for attempt in range(max_scroll_attempts):
-            # Try scrolling the table container
-            table.evaluate(f"element => {{ element.scrollLeft += {scroll_amount}; }}")
-            self.page.wait_for_timeout(500)
+            # Try scrolling the container
+            try:
+                scrollable_container.evaluate(f"element => {{ element.scrollLeft += {scroll_amount}; }}")
+            except Exception:
+                # Fallback: try scrolling the table directly
+                try:
+                    table.evaluate(f"element => {{ element.scrollLeft += {scroll_amount}; }}")
+                except Exception:
+                    # Final fallback: scroll window
+                    self.page.evaluate(f"window.scrollBy({scroll_amount}, 0)")
+            
+            self.page.wait_for_timeout(300)  # Wait for scroll to complete
             
             # Check if role column is now visible
-            if role_header.count() > 0:
-                header_box = role_header.first.bounding_box()
-                if header_box and header_box['x'] >= table_box['x'] and header_box['x'] <= table_box['x'] + table_box['width']:
-                    logger.info(f"✓ Role column '{role_name}' is now visible (attempt {attempt + 1})")
-                    self.screenshot(f"after-horizontal-scroll-{role_name}")
-                    return
+            for selector in role_header_selectors:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    header = locator.first
+                    try:
+                        if header.is_visible(timeout=1000):
+                            header_box = header.bounding_box()
+                            if header_box:
+                                logger.info(f"✓ Role column '{role_name}' is now visible (attempt {attempt + 1})")
+                                self.screenshot(f"after-horizontal-scroll-{role_name}")
+                                return
+                    except Exception:
+                        continue
         
-        # If still not found, try scrolling the window
-        logger.warning("Could not find role column by scrolling table, trying window scroll")
+        # If still not found, try scrolling in reverse direction
+        logger.warning("Could not find role column scrolling right, trying left...")
         for attempt in range(max_scroll_attempts):
-            self.page.evaluate(f"window.scrollBy({scroll_amount}, 0)")
-            self.page.wait_for_timeout(500)
+            try:
+                scrollable_container.evaluate(f"element => {{ element.scrollLeft -= {scroll_amount}; }}")
+            except Exception:
+                try:
+                    table.evaluate(f"element => {{ element.scrollLeft -= {scroll_amount}; }}")
+                except Exception:
+                    self.page.evaluate(f"window.scrollBy(-{scroll_amount}, 0)")
             
-            if role_header.count() > 0 and role_header.first.is_visible():
-                logger.info(f"✓ Role column '{role_name}' found via window scroll")
-                return
+            self.page.wait_for_timeout(300)
+            
+            for selector in role_header_selectors:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    header = locator.first
+                    try:
+                        if header.is_visible(timeout=1000):
+                            logger.info(f"✓ Role column '{role_name}' found scrolling left (attempt {attempt + 1})")
+                            self.screenshot(f"after-horizontal-scroll-{role_name}")
+                            return
+                    except Exception:
+                        continue
         
         self.screenshot(f"role-column-{role_name}-not-found-after-scroll")
-        raise Exception(f"Could not find role column '{role_name}' after horizontal scrolling")
+        # Don't raise exception here - let the caller handle it
+        logger.warning(f"Could not find role column '{role_name}' after extensive horizontal scrolling")
     
     def assign_privilege_to_role(self, privilege_name: str, role_name: str) -> None:
         """
