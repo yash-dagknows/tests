@@ -458,8 +458,27 @@ class DagKnowsAPIClient:
             List of user objects (direct array, not wrapped in a key)
         """
         # Frontend uses POST /get_org_users with empty body
+        # Note: Frontend sends JSON.stringify({}) which is "{}"
+        # The frontend doesn't explicitly set Content-Type, but requests library will set it automatically
         response = self._request("POST", "/get_org_users", json={}, with_proxy=True)
-        result = response.json()
+        
+        # Check response status and content
+        logger.debug(f"get_org_users response status: {response.status_code}")
+        logger.debug(f"get_org_users response headers: {dict(response.headers)}")
+        
+        # Check if response is empty or not JSON
+        if not response.text or not response.text.strip():
+            logger.error("get_org_users returned empty response")
+            return []
+        
+        # Try to parse JSON
+        try:
+            result = response.json()
+        except ValueError as e:
+            logger.error(f"get_org_users response is not valid JSON: {e}")
+            logger.error(f"Response text (first 500 chars): {response.text[:500]}")
+            logger.error(f"Response content type: {response.headers.get('Content-Type', 'unknown')}")
+            raise ValueError(f"Failed to parse JSON response from /get_org_users: {e}. Response: {response.text[:200]}")
         
         logger.debug(f"get_org_users response type: {type(result)}")
         logger.debug(f"get_org_users response keys (if dict): {result.keys() if isinstance(result, dict) else 'N/A'}")
