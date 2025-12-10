@@ -35,28 +35,59 @@ class DagKnowsAPIClient:
         self.session.headers.update(config.get_auth_headers())
         
     def _get_url(self, endpoint: str, with_proxy: bool = True) -> str:
-        """Get full URL with optional proxy parameter."""
+        """
+        Get full URL with optional proxy parameter.
+        
+        Args:
+            endpoint: API endpoint (e.g., "/api/v1/tasks/")
+            with_proxy: Whether to add proxy parameter
+            
+        Returns:
+            Full URL (proxy param will be added via params in _request, not here)
+        """
         base = self.base_url.rstrip('/')
         endpoint = endpoint.lstrip('/')
-        
-        if with_proxy and self.proxy_param:
-            separator = '&' if '?' in endpoint else self.proxy_param
-            return f"{base}/{endpoint}{separator}"
-        else:
-            return f"{base}/{endpoint}"
+        return f"{base}/{endpoint}"
     
     def _request(
         self,
         method: str,
         endpoint: str,
         with_proxy: bool = True,
+        params: Optional[Dict[str, Any]] = None,
         **kwargs
     ) -> requests.Response:
-        """Make HTTP request."""
-        url = self._get_url(endpoint, with_proxy=with_proxy)
-        logger.debug(f"{method.upper()} {url}")
+        """
+        Make HTTP request.
         
-        response = self.session.request(method, url, **kwargs)
+        Args:
+            method: HTTP method (GET, POST, PUT, DELETE, etc.)
+            endpoint: API endpoint (e.g., "/api/v1/tasks/")
+            with_proxy: Whether to add proxy parameter to query params
+            params: Query parameters (merged with proxy param if needed)
+            **kwargs: Additional request kwargs (json, headers, etc.)
+        """
+        url = self._get_url(endpoint, with_proxy=with_proxy)
+        
+        # Merge params with proxy param if needed
+        request_params = params.copy() if params else {}
+        
+        # Add proxy parameter if needed
+        if with_proxy and self.proxy_param:
+            # proxy_param is like "?proxy=dev1" or "proxy=dev1"
+            # Extract the key=value part
+            proxy_str = self.proxy_param.lstrip('?')
+            if '=' in proxy_str:
+                proxy_key, proxy_value = proxy_str.split('=', 1)
+                request_params[proxy_key] = proxy_value
+        
+        logger.debug(f"{method.upper()} {url}")
+        if request_params:
+            logger.debug(f"Query params: {request_params}")
+        if 'json' in kwargs:
+            logger.debug(f"Request payload: {kwargs['json']}")
+        
+        response = self.session.request(method, url, params=request_params, **kwargs)
         
         try:
             response.raise_for_status()
@@ -69,66 +100,107 @@ class DagKnowsAPIClient:
     
     # ==================== TASK OPERATIONS ====================
     
-    def create_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_task(self, task_data: Dict[str, Any], wsid: Optional[str] = None) -> Dict[str, Any]:
         """
-        Create a new task (matches frontend behavior).
+        Create a new task via API.
+        
+        Uses the new /api/v1/tasks/ endpoint (not the legacy /api/tasks/).
+        The frontend uses /api/tasks/ which gets proxied to /api/v1/tasks/ by req-router.
+        For direct API tests, we use /api/v1/tasks/ directly.
         
         Args:
             task_data: Task data dictionary
+            wsid: Optional workspace ID (if not provided, will be set from task_data.workspace_ids or source_wsid)
             
         Returns:
             Created task response
         """
+        # Match frontend behavior: wrap in "task" key
         payload = {"task": task_data}
-        response = self._request("POST", "/api/v1/tasks/", json=payload)
+        
+        # Add workspace ID if provided
+        params = {}
+        if wsid:
+            params["wsid"] = wsid
+        
+        response = self._request("POST", "/api/v1/tasks/", json=payload, params=params)
         return response.json()
     
-    def get_task(self, task_id: str) -> Dict[str, Any]:
-        """Get task by ID."""
-        response = self._request("GET", f"/api/v1/tasks/{task_id}")
+    def get_task(self, task_id: str, wsid: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get task by ID via API.
+        
+        Uses the new /api/v1/tasks/ endpoint (not the legacy /api/tasks/).
+        
+        Args:
+            task_id: Task ID
+            wsid: Optional workspace ID
+        """
+        params = {}
+        if wsid:
+            params["wsid"] = wsid
+        
+        response = self._request("GET", f"/api/v1/tasks/{task_id}", params=params)
         return response.json()
     
     def update_task(
         self,
         task_id: str,
         task_data: Dict[str, Any],
+        wsid: Optional[str] = None,
         update_mask: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
-        Update task (matches frontend behavior - sends full object + update_mask).
+        Update task via API.
+        
+        Uses the new /api/v1/tasks/ endpoint (not the legacy /api/tasks/).
         
         Args:
             task_id: Task ID
             task_data: Full task object (like frontend sends)
-            update_mask: List of fields being updated
+            wsid: Optional workspace ID
+            update_mask: List of fields being updated (optional)
             
         Returns:
             Updated task response
         """
-        payload = {
-            "task": task_data,
-            "update_mask": update_mask or []
-        }
-        response = self._request("PATCH", f"/api/v1/tasks/{task_id}", json=payload)
+        params = {}
+        if wsid:
+            params["wsid"] = wsid
+        
+        # Frontend sends the task object directly, not wrapped
+        payload = task_data
+        if update_mask:
+            payload["update_mask"] = update_mask
+        
+        response = self._request("PUT", f"/api/v1/tasks/{task_id}", json=payload, params=params)
         return response.json()
     
-    def delete_task(self, task_id: str, wsid: str = "__DEFAULT__") -> Optional[Dict[str, Any]]:
+    def delete_task(self, task_id: str, wsid: Optional[str] = None, recurse: bool = False, forced: bool = False) -> Optional[Dict[str, Any]]:
         """
-        Delete task (matches frontend behavior).
+        Delete task via API.
+        
+        Uses the new /api/v1/tasks/ endpoint (not the legacy /api/tasks/).
         
         Args:
             task_id: Task ID
-            wsid: Workspace ID
+            wsid: Optional workspace ID
+            recurse: Whether to delete recursively
+            forced: Whether to force delete
             
         Returns:
             Delete response or None
         """
+        params = {}
+        if wsid:
+            params["wsid"] = wsid
+        if recurse:
+            params["recurse"] = "true"
+        if forced:
+            params["forced"] = "true"
+        
         try:
-            response = self._request(
-                "DELETE",
-                f"/api/v1/tasks/{task_id}",
-                params={"wsid": wsid}
-            )
+            response = self._request("DELETE", f"/api/v1/tasks/{task_id}", params=params)
             return response.json() if response.text else {}
         except requests.HTTPError as e:
             if e.response.status_code == 500:
@@ -141,15 +213,19 @@ class DagKnowsAPIClient:
         page_size: int = 20,
         page_key: Optional[str] = None,
         query: Optional[str] = None,
+        wsid: Optional[str] = None,
         **filters
     ) -> Dict[str, Any]:
         """
-        List tasks (matches frontend list/search behavior).
+        List tasks via API.
+        
+        Uses the new /api/v1/tasks/ endpoint (not the legacy /api/tasks/).
         
         Args:
             page_size: Number of tasks per page
             page_key: Pagination key
             query: Search query (uses KNN search)
+            wsid: Optional workspace ID
             **filters: Additional filters (tags, etc.)
             
         Returns:
@@ -160,6 +236,8 @@ class DagKnowsAPIClient:
             params["page_key"] = page_key
         if query:
             params["q"] = query  # KNN search like UI does
+        if wsid:
+            params["wsid"] = wsid
         params.update(filters)
         
         response = self._request("GET", "/api/v1/tasks/", params=params)
