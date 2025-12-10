@@ -799,111 +799,17 @@ class SettingsPage(BasePage):
         role_input.fill(role_name)
         logger.info(f"✓ Typed role name: {role_name}")
         
-        # Wait a moment for UI to update (button might become enabled after input)
-        self.page.wait_for_timeout(1000)
+        # Wait a moment for UI to update
+        self.page.wait_for_timeout(500)
         
         self.screenshot(f"after-typing-role-name-{role_name}")
         
-        # Click Add button - Based on frontend structure:
-        # The "Create new custom role" section is a table with:
-        # - Header: "Create new custom role" (colspan="2")
-        # - Body row with:
-        #   - First <td>: Input field (role_input)
-        #   - Second <td>: Add button
-        # So we need to find the table row and get the 2nd column (td)
-        add_clicked = False
-        
-        # Strategy 1: Find the table row containing the role input, then get 2nd column
-        try:
-            logger.info("Trying to find Add button in 2nd column of table row")
-            # Find the parent row of the role input
-            role_input_row = role_input.locator('.. >> ..')  # Go up: input -> td -> tr
-            if role_input_row.count() == 0:
-                # Try alternative: find row containing the input
-                role_input_row = self.page.locator(f'//tr[.//input[@placeholder="Role name"]]').first
-            
-            if role_input_row.count() > 0:
-                # Get all cells in the row
-                row_cells = role_input_row.locator('td').all()
-                logger.info(f"Found {len(row_cells)} cells in role creation row")
-                
-                if len(row_cells) >= 2:
-                    # Get the 2nd column (index 1) which contains the Add button
-                    second_cell = row_cells[1]
-                    add_button = second_cell.locator('button:has-text("Add")').first
-                    
-                    if add_button.count() == 0:
-                        # Try without text filter
-                        add_button = second_cell.locator('button').first
-                    
-                    if add_button.count() > 0:
-                        if add_button.is_visible(timeout=2000):
-                            add_button.scroll_into_view_if_needed()
-                            self.page.wait_for_timeout(300)
-                            add_button.click()
-                            add_clicked = True
-                            logger.info("✓ Clicked Add button by accessing 2nd column directly from table row")
-        except Exception as e:
-            logger.debug(f"Direct column access failed: {e}")
-        
-        # Strategy 2: Find table with "Create new custom role" header, then get button in 2nd column
-        if not add_clicked:
-            try:
-                logger.info("Trying to find Add button via table structure")
-                # Find table with "Create new custom role" header
-                create_role_table = self.page.locator('table:has-text("Create new custom role")').first
-                if create_role_table.count() > 0:
-                    # Get the tbody row
-                    tbody_row = create_role_table.locator('tbody >> tr').first
-                    if tbody_row.count() > 0:
-                        # Get 2nd column
-                        second_cell = tbody_row.locator('td:nth-child(2)').first
-                        add_button = second_cell.locator('button:has-text("Add")').first
-                        if add_button.count() == 0:
-                            add_button = second_cell.locator('button').first
-                        
-                        if add_button.count() > 0 and add_button.is_visible(timeout=2000):
-                            add_button.scroll_into_view_if_needed()
-                            self.page.wait_for_timeout(300)
-                            add_button.click()
-                            add_clicked = True
-                            logger.info("✓ Clicked Add button via table structure (2nd column)")
-            except Exception as e:
-                logger.debug(f"Table structure approach failed: {e}")
-        
-        # Strategy 3: Fallback to selectors (if direct access didn't work)
-        if not add_clicked:
-            add_button_selectors = [
-                # Within "Create new custom role" table, 2nd column
-                'table:has-text("Create new custom role") >> tbody >> tr >> td:nth-child(2) >> button:has-text("Add")',
-                'table:has-text("Create new custom role") >> tbody >> tr >> td:nth-child(2) >> button',
-                # Near the role input
-                'input[placeholder="Role name"] >> .. >> .. >> td:nth-child(2) >> button:has-text("Add")',
-                # Generic fallbacks
-                'text=Create new custom role >> .. >> button:has-text("Add")',
-                'input[placeholder="Role name"] ~ button:has-text("Add")',
-                'button:has-text("Add")',
-            ]
-            
-            for selector in add_button_selectors:
-                try:
-                    locator = self.page.locator(selector)
-                    if locator.count() > 0:
-                        element = locator.first
-                        if element.is_visible(timeout=2000):
-                            element.scroll_into_view_if_needed()
-                            self.page.wait_for_timeout(300)
-                            element.click()
-                            add_clicked = True
-                            logger.info(f"✓ Clicked Add button with selector: {selector}")
-                            break
-                except Exception as e:
-                    logger.debug(f"Add button selector '{selector}' failed: {e}")
-                    continue
-        
-        if not add_clicked:
-            self.screenshot("add-role-button-not-found")
-            raise Exception("Could not find or click Add button for role")
+        # Press Enter to submit - Based on frontend code:
+        # The input has @keyup.enter.stop.prevent="add_custom_role"
+        # So pressing Enter will trigger role creation
+        logger.info("Pressing Enter to create role")
+        role_input.press("Enter")
+        logger.info("✓ Pressed Enter to create role")
         
         # Wait for network requests to complete
         self.page.wait_for_load_state("networkidle", timeout=10000)
