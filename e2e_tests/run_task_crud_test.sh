@@ -2,6 +2,20 @@
 # run_task_crud_test.sh
 # Helper script to run E2E UI tests for Task CRUD Operations
 
+# Get script directory and source environment setup
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Source environment setup (creates __init__.py files and sets PYTHONPATH)
+if [ -f "setup_env.sh" ]; then
+    source setup_env.sh
+else
+    # Fallback: manual setup
+    export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+    touch __init__.py config/__init__.py fixtures/__init__.py pages/__init__.py \
+          api_tests/__init__.py ui_tests/__init__.py utils/__init__.py 2>/dev/null || true
+fi
+
 # --- Configuration ---
 TEST_FILE="ui_tests/test_task_crud.py"
 DEFAULT_TEST_FUNCTION="" # Run all tests in the file by default
@@ -70,8 +84,10 @@ for arg in "$@"; do
 done
 
 # --- Environment Setup ---
-# Set PYTHONPATH to include the current directory for module imports
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+# PYTHONPATH is already set by setup_env.sh above, but ensure it's set
+if [[ ":$PYTHONPATH:" != *":$(pwd):"* ]]; then
+    export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+fi
 
 # Set environment variables based on mode
 if [ "$LOCAL_MODE" == "true" ]; then

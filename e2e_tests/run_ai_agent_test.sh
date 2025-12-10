@@ -8,8 +8,19 @@
 
 set -e
 
-# Set PYTHONPATH to include current directory
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+# Get script directory and source environment setup
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Source environment setup (creates __init__.py files and sets PYTHONPATH)
+if [ -f "setup_env.sh" ]; then
+    source setup_env.sh
+else
+    # Fallback: manual setup
+    export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+    touch __init__.py config/__init__.py fixtures/__init__.py pages/__init__.py \
+          api_tests/__init__.py ui_tests/__init__.py utils/__init__.py 2>/dev/null || true
+fi
 
 # Colors
 GREEN='\033[0;32m'

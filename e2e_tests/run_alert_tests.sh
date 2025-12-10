@@ -18,6 +18,16 @@ echo
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
+# Source environment setup (creates __init__.py files and sets PYTHONPATH)
+if [ -f "setup_env.sh" ]; then
+    source setup_env.sh
+else
+    # Fallback: manual setup
+    export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+    touch __init__.py config/__init__.py fixtures/__init__.py pages/__init__.py \
+          api_tests/__init__.py ui_tests/__init__.py utils/__init__.py 2>/dev/null || true
+fi
+
 # Check if venv exists
 if [ ! -d "venv" ]; then
     echo -e "${YELLOW}⚠ Virtual environment not found${NC}"
@@ -28,8 +38,10 @@ fi
 # Activate venv
 source venv/bin/activate
 
-# Set PYTHONPATH
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+# PYTHONPATH is already set by setup_env.sh above, but ensure it's set
+if [[ ":$PYTHONPATH:" != *":$(pwd):"* ]]; then
+    export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+fi
 
 # Parse arguments
 TEST_MODE="all"
