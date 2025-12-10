@@ -5,9 +5,11 @@ Tests assigning a role to a user for a specific workspace via API endpoints.
 This test sends requests directly to dev.dagknows.com (or configured base URL).
 
 Based on frontend API calls:
-- Get users: GET /api/users/?ids=all
+- Get users: POST /get_org_users (with empty body)
 - Get workspaces: GET /api/workspaces/
+- Get roles: GET /api/iam/roles
 - Assign role: POST /api/iam/users/{userid}/roles with {"added_roles": [...], "removed_roles": [...]}
+- Get user roles: GET /api/iam/users/{userid}/roles
 """
 
 import pytest

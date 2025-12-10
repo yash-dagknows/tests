@@ -444,24 +444,45 @@ class DagKnowsAPIClient:
     
     def list_users(self, user_ids: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """
-        List users (matches frontend behavior).
+        List organization users (matches frontend behavior).
         
-        Frontend calls: logFetchAJAX(getUrl('/api/users/?ids=all'))
+        Frontend calls: logFetchAJAX(getUrl('/get_org_users'), { method: "POST", body: {} })
+        This is used in the User Dashboard page to get all users in the organization.
+        
+        Note: There's also /api/users/?ids=all but the frontend uses /get_org_users for the user management page.
         
         Args:
-            user_ids: Optional list of user IDs to fetch (defaults to 'all')
+            user_ids: Optional list of user IDs to fetch (not used for org users, kept for compatibility)
             
         Returns:
-            List of user objects
+            List of user objects (direct array, not wrapped in a key)
         """
-        params = {}
-        if user_ids:
-            params["ids"] = ",".join(user_ids)
-        else:
-            params["ids"] = "all"
+        # Frontend uses POST /get_org_users with empty body
+        response = self._request("POST", "/get_org_users", json={}, with_proxy=True)
+        result = response.json()
         
-        response = self._request("GET", "/api/users/", params=params)
-        return response.json().get("users", [])
+        logger.debug(f"get_org_users response type: {type(result)}")
+        logger.debug(f"get_org_users response keys (if dict): {result.keys() if isinstance(result, dict) else 'N/A'}")
+        
+        # Response might be a list directly, or wrapped in a key
+        if isinstance(result, list):
+            logger.debug(f"Response is a list with {len(result)} users")
+            return result
+        elif isinstance(result, dict):
+            # Check common keys
+            if "users" in result:
+                logger.debug(f"Response has 'users' key with {len(result['users'])} users")
+                return result["users"]
+            elif "org_users" in result:
+                logger.debug(f"Response has 'org_users' key with {len(result['org_users'])} users")
+                return result["org_users"]
+            else:
+                # Return all values if it's a dict of users
+                values = list(result.values()) if result else []
+                logger.debug(f"Response is a dict, returning {len(values)} values")
+                return values
+        logger.warning(f"Unexpected response type: {type(result)}")
+        return []
     
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """
@@ -474,9 +495,18 @@ class DagKnowsAPIClient:
             User object or None if not found
         """
         users = self.list_users()
+        logger.debug(f"Searching for user with email '{email}' in {len(users)} users")
+        
         for user in users:
-            if user.get("email", "").lower() == email.lower():
+            # Check both 'email' and 'userid' fields (frontend uses both)
+            user_email = user.get("email", "") or user.get("userid", "")
+            if user_email and user_email.lower() == email.lower():
+                logger.debug(f"Found user: {user_email} (id: {user.get('id')})")
                 return user
+        
+        # Log available emails for debugging
+        available_emails = [u.get("email") or u.get("userid", "") for u in users[:5]]
+        logger.debug(f"Available user emails (first 5): {available_emails}")
         return None
     
     # ==================== IAM/ROLE OPERATIONS ====================
@@ -615,7 +645,7 @@ class DagKnowsAPIClient:
         response = self._request("POST", f"/api/iam/users/{user_id}/roles", json=payload)
         return response.json()
     
-    def get_user_roles(self, user_id: str) -> Dict[str, List[str]]:
+    def get_user_roles(self, user_id: str, map_ids_to_names: bool = True) -> Dict[str, List[str]]:
         """
         Get roles assigned to a user (matches frontend behavior).
         
@@ -623,15 +653,27 @@ class DagKnowsAPIClient:
         
         Args:
             user_id: User ID
+            map_ids_to_names: If True, map workspace IDs to workspace names (default: True)
             
         Returns:
-            Dictionary mapping workspace names to lists of role names
-            Example: {"Default": ["Admin"], "DEV": ["read1"]}
+            Dictionary mapping workspace names (or IDs if map_ids_to_names=False) to lists of role names
+            Example: {"Default": ["Admin"], "DEV": ["read1"]} or {"": ["Admin"], "workspace-id-123": ["read1"]}
+            
+        Note: The API returns resource_id which is the workspace ID. By default, we map IDs to names
+        for better usability, but the frontend uses IDs directly as keys.
         """
         response = self._request("GET", f"/api/iam/users/{user_id}/roles")
         rassocs = response.json().get("rassocs", [])
         
         out = {}
+        workspace_id_to_name = {}
+        
+        # Build workspace ID to name mapping if needed
+        if map_ids_to_names:
+            workspaces = self.list_workspaces()
+            for workspace in workspaces:
+                workspace_id_to_name[workspace.get("id", "")] = workspace.get("title", "")
+        
         for rassoc in rassocs:
             restype = rassoc.get("resource_type", "")
             if restype != "proxy":
@@ -639,10 +681,17 @@ class DagKnowsAPIClient:
                 # Map empty resource_id to "Default" (frontend does this)
                 if not resource_id or resource_id == "undefined":
                     resource_id = "Default"
+                    key = "Default"
+                elif map_ids_to_names and resource_id in workspace_id_to_name:
+                    # Map workspace ID to workspace name
+                    key = workspace_id_to_name[resource_id]
+                else:
+                    # Use resource_id as-is (could be ID or name)
+                    key = resource_id
                 
-                if resource_id not in out:
-                    out[resource_id] = []
-                out[resource_id].append(rassoc.get("role_name", ""))
+                if key not in out:
+                    out[key] = []
+                out[key].append(rassoc.get("role_name", ""))
         
         return out
     
