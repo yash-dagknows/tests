@@ -622,4 +622,347 @@ class SettingsPage(BasePage):
         self.screenshot(f"workspace-{workspace_name}-not-found")
         return False
 
+    # ==================== RBAC Role Management Methods ====================
+    
+    # RBAC Tab selector
+    RBAC_TAB = 'button:has-text("Workspaces"), [role="tab"]:has-text("Workspaces")'  # Workspaces tab shows RBAC content
+    
+    # Create Custom Role selectors
+    CREATE_CUSTOM_ROLE_HEADING = 'text=Create new custom role'
+    ROLE_NAME_INPUT = 'input[placeholder="Role name"]'
+    ADD_ROLE_BUTTON = 'button:has-text("Add")'  # Same button used for workspace, but in RBAC context
+    
+    # Privileges table selectors
+    PRIVILEGES_TABLE_HEADING = 'text=Privileges'
+    PRIVILEGES_TABLE = 'table'  # The privileges table
+    PRIVILEGE_ROW = 'tr:has-text("{privilege_name}")'  # Row for a specific privilege
+    ROLE_COLUMN_HEADER = 'th:has-text("{role_name}")'  # Column header for a role
+    PRIVILEGE_CHECKBOX = 'tr:has-text("{privilege_name}") >> td >> input[type="checkbox"]'  # Checkbox in privilege row
+    
+    def navigate_to_rbac_tab(self) -> None:
+        """
+        Navigate directly to RBAC tab via URL.
+        The RBAC content is shown when tab=rbac is in the URL.
+        """
+        logger.info("Navigating to RBAC tab")
+        rbac_url = f"{self.settings_url}?tab=rbac"
+        self.goto(rbac_url)
+        self.page.wait_for_load_state("networkidle", timeout=10000)
+        self.page.wait_for_timeout(2000)  # Give time for content to load
+        self.screenshot("rbac-tab-loaded")
+        logger.info("✓ RBAC tab loaded")
+        
+        # Verify we're on RBAC tab
+        current_url = self.page.url
+        if "tab=rbac" not in current_url:
+            logger.warning(f"URL does not contain 'tab=rbac'. Current URL: {current_url}")
+    
+    def scroll_to_create_custom_role_section(self) -> None:
+        """Scroll down to the 'Create new custom role' section."""
+        logger.info("Scrolling to 'Create new custom role' section")
+        self.screenshot("before-scroll-to-create-role")
+        
+        try:
+            # Find the heading and scroll to it
+            heading = self.page.locator(self.CREATE_CUSTOM_ROLE_HEADING)
+            heading.first.wait_for(state="visible", timeout=10000)
+            heading.first.scroll_into_view_if_needed()
+            self.page.wait_for_timeout(1000)
+            logger.info("✓ Scrolled to 'Create new custom role' section")
+            self.screenshot("after-scroll-to-create-role")
+        except Exception as e:
+            logger.error(f"Could not find 'Create new custom role' heading: {e}")
+            self.screenshot("create-role-heading-not-found")
+            # Fallback: scroll down a bit
+            self.page.evaluate("window.scrollBy(0, 800)")
+            self.page.wait_for_timeout(1000)
+            raise Exception("Could not scroll to 'Create new custom role' section")
+    
+    def create_custom_role(self, role_name: str) -> None:
+        """
+        Create a new custom role.
+        
+        Args:
+            role_name: Name of the role to create (e.g., "read1")
+        """
+        logger.info(f"Creating custom role: {role_name}")
+        self.screenshot(f"before-create-role-{role_name}")
+        
+        # Scroll to the section first
+        self.scroll_to_create_custom_role_section()
+        
+        # Find and fill the role name input
+        role_input = None
+        input_selectors = [
+            self.ROLE_NAME_INPUT,
+            'input[placeholder*="Role name"]',
+            'label:has-text("Role name") + input',
+            'text=Create new custom role >> .. >> input'
+        ]
+        
+        for selector in input_selectors:
+            locator = self.page.locator(selector)
+            if locator.count() > 0 and locator.first.is_visible():
+                role_input = locator.first
+                logger.info(f"Found role name input with: {selector}")
+                break
+        
+        if not role_input:
+            self.screenshot("role-name-input-not-found")
+            raise Exception("Could not find role name input field")
+        
+        role_input.fill(role_name)
+        logger.info(f"✓ Filled role name: {role_name}")
+        self.page.wait_for_timeout(1000)
+        self.screenshot(f"after-filling-role-name-{role_name}")
+        
+        # Find and click the Add button (next to the input field)
+        add_button = None
+        add_button_selectors = [
+            f'{self.ROLE_NAME_INPUT} ~ {self.ADD_ROLE_BUTTON}',
+            f'{self.ROLE_NAME_INPUT} + {self.ADD_ROLE_BUTTON}',
+            f'text=Create new custom role >> .. >> {self.ADD_ROLE_BUTTON}',
+            self.ADD_ROLE_BUTTON
+        ]
+        
+        for selector in add_button_selectors:
+            locator = self.page.locator(selector)
+            if locator.count() > 0:
+                # Check if it's in the "Create new custom role" section (not workspace section)
+                box = locator.first.bounding_box()
+                if box:
+                    # Find the create role heading to get its position
+                    heading_box = self.page.locator(self.CREATE_CUSTOM_ROLE_HEADING).first.bounding_box()
+                    if heading_box and abs(box['y'] - heading_box['y']) < 200:  # Within 200px of heading
+                        add_button = locator.first
+                        logger.info(f"Found Add button for role with: {selector}")
+                        break
+        
+        if not add_button:
+            # Fallback: find any visible "Add" button
+            all_add_buttons = self.page.locator('button:has-text("Add")').all()
+            for btn in all_add_buttons:
+                if btn.is_visible():
+                    # Check if it's near the role name input
+                    btn_box = btn.bounding_box()
+                    input_box = role_input.bounding_box()
+                    if btn_box and input_box and abs(btn_box['y'] - input_box['y']) < 50:
+                        add_button = btn
+                        logger.info("Found Add button near role name input")
+                        break
+        
+        if add_button:
+            add_button.click()
+            logger.info("✓ Clicked Add button for role")
+            self.page.wait_for_load_state("networkidle", timeout=10000)
+            self.page.wait_for_timeout(2000)  # Give time for role to appear in table
+            self.screenshot(f"after-create-role-{role_name}")
+            logger.info(f"✓ Custom role '{role_name}' creation requested")
+        else:
+            self.screenshot("add-role-button-not-found")
+            raise Exception("Could not find or click Add button for role")
+    
+    def verify_role_in_privileges_table(self, role_name: str, timeout: int = 10000) -> None:
+        """
+        Verify that a newly created role appears in the privileges table.
+        
+        Args:
+            role_name: Name of the role to verify
+            timeout: Wait timeout in ms
+        """
+        logger.info(f"Verifying role '{role_name}' in privileges table")
+        self.screenshot(f"checking-role-{role_name}")
+        
+        # Wait for privileges table to be visible
+        try:
+            self.page.locator(self.PRIVILEGES_TABLE_HEADING).wait_for(state="visible", timeout=5000)
+        except Exception:
+            logger.warning("Could not find 'Privileges' heading, but continuing...")
+        
+        # Look for the role name in table headers
+        role_header_selector = self.ROLE_COLUMN_HEADER.format(role_name=role_name)
+        
+        try:
+            self.page.locator(role_header_selector).wait_for(state="visible", timeout=timeout)
+            logger.info(f"✓ Role '{role_name}' found in privileges table")
+        except Exception as e:
+            self.screenshot(f"role-{role_name}-not-found-in-table")
+            raise Exception(f"Role '{role_name}' not found in privileges table: {e}")
+    
+    def scroll_to_privileges_table(self) -> None:
+        """Scroll to the privileges table section."""
+        logger.info("Scrolling to privileges table")
+        self.screenshot("before-scroll-to-privileges")
+        
+        try:
+            heading = self.page.locator(self.PRIVILEGES_TABLE_HEADING)
+            heading.first.wait_for(state="visible", timeout=10000)
+            heading.first.scroll_into_view_if_needed()
+            self.page.wait_for_timeout(1000)
+            logger.info("✓ Scrolled to privileges table")
+            self.screenshot("after-scroll-to-privileges")
+        except Exception as e:
+            logger.error(f"Could not find privileges table heading: {e}")
+            # Fallback: scroll down more
+            self.page.evaluate("window.scrollBy(0, 1200)")
+            self.page.wait_for_timeout(1000)
+    
+    def scroll_horizontally_to_role_column(self, role_name: str) -> None:
+        """
+        Scroll horizontally in the privileges table to find the role column.
+        
+        Args:
+            role_name: Name of the role column to scroll to
+        """
+        logger.info(f"Scrolling horizontally to find role column: {role_name}")
+        self.screenshot(f"before-horizontal-scroll-{role_name}")
+        
+        # Find the privileges table
+        table = self.page.locator(self.PRIVILEGES_TABLE).first
+        if not table.is_visible():
+            raise Exception("Privileges table not visible")
+        
+        # Get the table's scroll container (might be the table itself or a parent)
+        table_box = table.bounding_box()
+        if not table_box:
+            raise Exception("Could not get table bounding box")
+        
+        # Try to find the role column header
+        role_header_selector = self.ROLE_COLUMN_HEADER.format(role_name=role_name)
+        role_header = self.page.locator(role_header_selector)
+        
+        # Check if role column is already visible
+        if role_header.count() > 0 and role_header.first.is_visible():
+            logger.info(f"✓ Role column '{role_name}' is already visible")
+            return
+        
+        # Scroll horizontally to find the role column
+        # The table might be in a scrollable container
+        max_scroll_attempts = 10
+        scroll_amount = 200  # pixels per scroll
+        
+        for attempt in range(max_scroll_attempts):
+            # Try scrolling the table container
+            table.evaluate(f"element => {{ element.scrollLeft += {scroll_amount}; }}")
+            self.page.wait_for_timeout(500)
+            
+            # Check if role column is now visible
+            if role_header.count() > 0:
+                header_box = role_header.first.bounding_box()
+                if header_box and header_box['x'] >= table_box['x'] and header_box['x'] <= table_box['x'] + table_box['width']:
+                    logger.info(f"✓ Role column '{role_name}' is now visible (attempt {attempt + 1})")
+                    self.screenshot(f"after-horizontal-scroll-{role_name}")
+                    return
+        
+        # If still not found, try scrolling the window
+        logger.warning("Could not find role column by scrolling table, trying window scroll")
+        for attempt in range(max_scroll_attempts):
+            self.page.evaluate(f"window.scrollBy({scroll_amount}, 0)")
+            self.page.wait_for_timeout(500)
+            
+            if role_header.count() > 0 and role_header.first.is_visible():
+                logger.info(f"✓ Role column '{role_name}' found via window scroll")
+                return
+        
+        self.screenshot(f"role-column-{role_name}-not-found-after-scroll")
+        raise Exception(f"Could not find role column '{role_name}' after horizontal scrolling")
+    
+    def assign_privilege_to_role(self, privilege_name: str, role_name: str) -> None:
+        """
+        Assign a privilege to a role by checking the checkbox.
+        
+        Args:
+            privilege_name: Name of the privilege (e.g., "task.view_code")
+            role_name: Name of the role (e.g., "read1")
+        """
+        logger.info(f"Assigning privilege '{privilege_name}' to role '{role_name}'")
+        self.screenshot(f"before-assign-{privilege_name}-to-{role_name}")
+        
+        # First, ensure the role column is visible
+        self.scroll_horizontally_to_role_column(role_name)
+        
+        # Find the privilege row
+        privilege_row_selector = self.PRIVILEGE_ROW.format(privilege_name=privilege_name)
+        privilege_row = self.page.locator(privilege_row_selector)
+        
+        if privilege_row.count() == 0:
+            self.screenshot(f"privilege-row-{privilege_name}-not-found")
+            raise Exception(f"Could not find privilege row for '{privilege_name}'")
+        
+        privilege_row.first.scroll_into_view_if_needed()
+        self.page.wait_for_timeout(500)
+        
+        # Find the role column header to get its index
+        role_header_selector = self.ROLE_COLUMN_HEADER.format(role_name=role_name)
+        role_header = self.page.locator(role_header_selector)
+        
+        if role_header.count() == 0:
+            raise Exception(f"Could not find role column header for '{role_name}'")
+        
+        # Get all table headers to find the column index
+        all_headers = self.page.locator(f'{self.PRIVILEGES_TABLE} >> thead >> th').all()
+        role_column_index = None
+        
+        for idx, header in enumerate(all_headers):
+            header_text = header.text_content()
+            if role_name in header_text:
+                role_column_index = idx
+                logger.info(f"Found role '{role_name}' at column index {idx}")
+                break
+        
+        if role_column_index is None:
+            raise Exception(f"Could not determine column index for role '{role_name}'")
+        
+        # Find the checkbox in the privilege row for this role column
+        # The checkbox should be in the td at the same column index
+        privilege_row_tds = privilege_row.first.locator('td').all()
+        
+        if len(privilege_row_tds) <= role_column_index:
+            raise Exception(f"Privilege row does not have enough columns (expected at least {role_column_index + 1})")
+        
+        # Get the td for this role column
+        role_column_td = privilege_row_tds[role_column_index]
+        
+        # Find the checkbox in this td
+        checkbox = role_column_td.locator('input[type="checkbox"]')
+        
+        if checkbox.count() == 0:
+            self.screenshot(f"checkbox-not-found-{privilege_name}-{role_name}")
+            raise Exception(f"Could not find checkbox for privilege '{privilege_name}' in role '{role_name}' column")
+        
+        checkbox = checkbox.first
+        
+        # Check if already checked
+        if checkbox.is_checked():
+            logger.info(f"✓ Privilege '{privilege_name}' is already assigned to role '{role_name}'")
+            return
+        
+        # Scroll checkbox into view and check it
+        checkbox.scroll_into_view_if_needed()
+        self.page.wait_for_timeout(500)
+        checkbox.check()
+        self.page.wait_for_timeout(1000)  # Give time for the change to register
+        
+        logger.info(f"✓ Assigned privilege '{privilege_name}' to role '{role_name}'")
+        self.screenshot(f"after-assign-{privilege_name}-to-{role_name}")
+    
+    def assign_multiple_privileges_to_role(self, privilege_names: list, role_name: str) -> None:
+        """
+        Assign multiple privileges to a role.
+        
+        Args:
+            privilege_names: List of privilege names (e.g., ["task.view_code", "task.view_io"])
+            role_name: Name of the role
+        """
+        logger.info(f"Assigning {len(privilege_names)} privileges to role '{role_name}'")
+        
+        for privilege_name in privilege_names:
+            try:
+                self.assign_privilege_to_role(privilege_name, role_name)
+            except Exception as e:
+                logger.error(f"Failed to assign '{privilege_name}' to '{role_name}': {e}")
+                raise
+        
+        logger.info(f"✓ All {len(privilege_names)} privileges assigned to role '{role_name}'")
+
 
