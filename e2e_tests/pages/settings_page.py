@@ -1345,4 +1345,391 @@ class SettingsPage(BasePage):
         
         logger.info(f"✓ All {len(privilege_names)} privileges assigned to role '{role_name}'")
 
+    # ==================== User Management Methods ====================
+    
+    # User management selectors
+    USERS_TABLE = 'table, [role="table"]'  # Users table
+    USER_ROW = 'tr:has-text("{user_email}")'  # Row for a specific user
+    USER_DROPDOWN_ARROW = 'tr:has-text("{user_email}") >> button[aria-label*="expand"], tr:has-text("{user_email}") >> [aria-label*="Expand"], tr:has-text("{user_email}") >> button:has([class*="chevron"])'
+    MODIFY_SETTINGS_BUTTON = 'button:has-text("Modify settings"), button:has-text("Modify Settings")'
+    
+    # Modify User Settings form selectors
+    MODIFY_USER_SETTINGS_HEADING = 'text=Modify User Settings'
+    WORKSPACE_ROLES_TABLE = 'text=Workspace Roles >> .. >> table, text=Workspace Roles >> xpath=following::table[1]'
+    WORKSPACE_ROW = 'tr:has-text("{workspace_name}")'  # Row for a workspace in the roles table
+    WORKSPACE_ROLE_DROPDOWN = 'tr:has-text("{workspace_name}") >> select, tr:has-text("{workspace_name}") >> [role="combobox"]'
+    WORKSPACE_ROLE_OPTION = 'option:has-text("{role_name}"), [role="option"]:has-text("{role_name}")'
+    SAVE_CHANGES_BUTTON = 'button:has-text("Save Changes"), button:has-text("Save")'
+    SAVE_USER_SETTINGS_BUTTON = 'button:has-text("Save Changes"), button:has-text("Save"), button[type="submit"]:has-text("Save")'
+    CANCEL_USER_SETTINGS_BUTTON = 'button:has-text("Cancel")'
+    SUCCESS_MESSAGE = 'text=Changes Saved Successfully, text=Changes saved successfully'
+    
+    def navigate_to_users_tab(self) -> None:
+        """
+        Navigate to Users tab on settings page.
+        """
+        logger.info("Navigating to Users tab")
+        self.navigate_to_settings_page()
+        self.click_users_tab()
+        logger.info("✓ Users tab loaded")
+    
+    def click_users_tab(self) -> None:
+        """
+        Click the "Users" tab on the settings page.
+        """
+        logger.info("Clicking Users tab on settings page")
+        self.screenshot("before-users-tab-click")
+        
+        # Try multiple selectors for the Users tab
+        users_tab_selectors = [
+            self.USERS_TAB,
+            'button:has-text("Users")',
+            '[role="tab"]:has-text("Users")',
+            'div[role="tablist"] >> text=Users',
+            '//button[contains(text(), "Users")]',
+        ]
+        
+        clicked = False
+        for selector in users_tab_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    element = locator.first
+                    element.scroll_into_view_if_needed()
+                    element.wait_for(state="visible", timeout=5000)
+                    element.click()
+                    clicked = True
+                    logger.info(f"✓ Clicked Users tab with selector: {selector}")
+                    break
+            except Exception as e:
+                logger.debug(f"Could not click Users tab with {selector}: {e}")
+        
+        if not clicked:
+            self.screenshot("users-tab-not-found")
+            raise Exception("Could not find or click Users tab")
+        
+        # Wait for tab content to load
+        self.page.wait_for_load_state("networkidle", timeout=10000)
+        self.page.wait_for_timeout(2000)  # Give time for content to load
+        self.screenshot("after-users-tab-click")
+        logger.info("✓ Users tab clicked and content loaded")
+    
+    def find_user_in_table(self, user_email: str) -> None:
+        """
+        Find a user in the users table and scroll to them.
+        
+        Args:
+            user_email: Email of the user to find
+        """
+        logger.info(f"Finding user '{user_email}' in users table")
+        self.screenshot(f"before-find-user-{user_email}")
+        
+        # Find the user row
+        user_row_selector = self.USER_ROW.format(user_email=user_email)
+        user_row = self.page.locator(user_row_selector)
+        
+        if user_row.count() == 0:
+            self.screenshot(f"user-{user_email}-not-found")
+            raise Exception(f"Could not find user '{user_email}' in users table")
+        
+        # Scroll to the user row
+        user_row.first.scroll_into_view_if_needed()
+        self.page.wait_for_timeout(1000)
+        logger.info(f"✓ Found user '{user_email}' in table")
+        self.screenshot(f"user-{user_email}-found")
+    
+    def expand_user_row(self, user_email: str) -> None:
+        """
+        Click the dropdown arrow next to a user to expand their row and show "Modify Settings" button.
+        
+        Args:
+            user_email: Email of the user
+        """
+        logger.info(f"Expanding user row for '{user_email}'")
+        self.screenshot(f"before-expand-user-{user_email}")
+        
+        # Find the user row first
+        self.find_user_in_table(user_email)
+        
+        # Find the dropdown arrow/button next to the user
+        dropdown_selectors = [
+            self.USER_DROPDOWN_ARROW.format(user_email=user_email),
+            f'tr:has-text("{user_email}") >> button:has([class*="chevron"])',
+            f'tr:has-text("{user_email}") >> button[aria-label*="expand"]',
+            f'tr:has-text("{user_email}") >> button[aria-label*="Expand"]',
+            f'tr:has-text("{user_email}") >> [aria-label*="expand"]',
+            f'//tr[contains(., "{user_email}")]//button[contains(@aria-label, "expand") or contains(@class, "chevron")]',
+        ]
+        
+        dropdown_clicked = False
+        for selector in dropdown_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    element = locator.first
+                    if element.is_visible(timeout=2000):
+                        element.scroll_into_view_if_needed()
+                        self.page.wait_for_timeout(300)
+                        element.click()
+                        dropdown_clicked = True
+                        logger.info(f"✓ Clicked dropdown arrow with selector: {selector}")
+                        break
+            except Exception as e:
+                logger.debug(f"Dropdown selector '{selector}' failed: {e}")
+                continue
+        
+        if not dropdown_clicked:
+            self.screenshot(f"user-dropdown-{user_email}-not-found")
+            raise Exception(f"Could not find or click dropdown arrow for user '{user_email}'")
+        
+        # Wait for the row to expand and "Modify Settings" button to appear
+        self.page.wait_for_timeout(1000)
+        self.screenshot(f"after-expand-user-{user_email}")
+        logger.info(f"✓ User row expanded for '{user_email}'")
+    
+    def click_modify_settings_for_user(self, user_email: str) -> None:
+        """
+        Click "Modify Settings" button for a user.
+        This should be called after expanding the user row.
+        
+        Args:
+            user_email: Email of the user
+        """
+        logger.info(f"Clicking 'Modify Settings' for user '{user_email}'")
+        self.screenshot(f"before-modify-settings-{user_email}")
+        
+        # Find the Modify Settings button
+        modify_button_selectors = [
+            self.MODIFY_SETTINGS_BUTTON,
+            'button:has-text("Modify settings")',
+            'button:has-text("Modify Settings")',
+            f'//tr[contains(., "{user_email}")]//button[contains(text(), "Modify")]',
+        ]
+        
+        modify_clicked = False
+        for selector in modify_button_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    element = locator.first
+                    if element.is_visible(timeout=2000):
+                        element.scroll_into_view_if_needed()
+                        self.page.wait_for_timeout(300)
+                        element.click()
+                        modify_clicked = True
+                        logger.info(f"✓ Clicked Modify Settings with selector: {selector}")
+                        break
+            except Exception as e:
+                logger.debug(f"Modify Settings selector '{selector}' failed: {e}")
+                continue
+        
+        if not modify_clicked:
+            self.screenshot(f"modify-settings-button-{user_email}-not-found")
+            raise Exception(f"Could not find or click 'Modify Settings' button for user '{user_email}'")
+        
+        # Wait for the Modify User Settings form to load
+        self.page.wait_for_load_state("networkidle", timeout=10000)
+        self.page.wait_for_timeout(2000)
+        
+        # Verify we're on the Modify User Settings page
+        try:
+            self.page.locator(self.MODIFY_USER_SETTINGS_HEADING).wait_for(state="visible", timeout=10000)
+            logger.info("✓ Modify User Settings form loaded")
+        except Exception:
+            logger.warning("Modify User Settings heading not found, but continuing...")
+        
+        self.screenshot(f"after-modify-settings-{user_email}")
+        logger.info(f"✓ Modify Settings clicked for user '{user_email}'")
+    
+    def assign_role_to_user_for_workspace(self, workspace_name: str, role_name: str, user_email: str = None) -> None:
+        """
+        Assign a role to a user for a specific workspace in the Modify User Settings form.
+        
+        Args:
+            workspace_name: Name of the workspace (e.g., "DEV")
+            role_name: Name of the role to assign (e.g., "read1")
+            user_email: Email of the user (optional, for logging)
+        """
+        logger.info(f"Assigning role '{role_name}' to workspace '{workspace_name}'")
+        if user_email:
+            logger.info(f"User: {user_email}")
+        self.screenshot(f"before-assign-role-{workspace_name}-{role_name}")
+        
+        # Find the workspace row in the Workspace Roles table
+        workspace_row_selector = self.WORKSPACE_ROW.format(workspace_name=workspace_name)
+        workspace_row = self.page.locator(workspace_row_selector)
+        
+        if workspace_row.count() == 0:
+            self.screenshot(f"workspace-row-{workspace_name}-not-found")
+            raise Exception(f"Could not find workspace '{workspace_name}' in Workspace Roles table")
+        
+        # Scroll to the workspace row
+        workspace_row.first.scroll_into_view_if_needed()
+        self.page.wait_for_timeout(500)
+        logger.info(f"✓ Found workspace '{workspace_name}' row")
+        
+        # Find the role dropdown for this workspace
+        dropdown_selectors = [
+            f'{workspace_row_selector} >> select',
+            f'{workspace_row_selector} >> [role="combobox"]',
+            f'{workspace_row_selector} >> input[type="text"]',
+            f'{workspace_row_selector} >> button',
+        ]
+        
+        role_dropdown = None
+        for selector in dropdown_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    element = locator.first
+                    if element.is_visible(timeout=2000):
+                        role_dropdown = element
+                        logger.info(f"Found role dropdown with selector: {selector}")
+                        break
+            except Exception as e:
+                logger.debug(f"Dropdown selector '{selector}' failed: {e}")
+                continue
+        
+        if not role_dropdown:
+            self.screenshot(f"role-dropdown-{workspace_name}-not-found")
+            raise Exception(f"Could not find role dropdown for workspace '{workspace_name}'")
+        
+        # Click the dropdown to open it
+        role_dropdown.scroll_into_view_if_needed()
+        self.page.wait_for_timeout(300)
+        role_dropdown.click()
+        self.page.wait_for_timeout(500)  # Wait for dropdown menu to appear
+        logger.info("✓ Clicked role dropdown")
+        self.screenshot(f"role-dropdown-opened-{workspace_name}")
+        
+        # Select the role from the dropdown
+        role_option_selectors = [
+            f'option:has-text("{role_name}")',
+            f'[role="option"]:has-text("{role_name}")',
+            f'//option[contains(text(), "{role_name}")]',
+            f'//div[@role="option" and contains(text(), "{role_name}")]',
+            f'text={role_name}',
+        ]
+        
+        role_selected = False
+        for selector in role_option_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    element = locator.first
+                    if element.is_visible(timeout=2000):
+                        element.click()
+                        role_selected = True
+                        logger.info(f"✓ Selected role '{role_name}' with selector: {selector}")
+                        break
+            except Exception as e:
+                logger.debug(f"Role option selector '{selector}' failed: {e}")
+                continue
+        
+        if not role_selected:
+            # Fallback: try typing the role name if it's an input
+            try:
+                if role_dropdown.get_attribute('tagName') == 'INPUT' or role_dropdown.get_attribute('type') == 'text':
+                    role_dropdown.fill(role_name)
+                    self.page.wait_for_timeout(500)
+                    # Press Enter to confirm
+                    role_dropdown.press("Enter")
+                    role_selected = True
+                    logger.info(f"✓ Typed and selected role '{role_name}'")
+            except Exception:
+                pass
+        
+        if not role_selected:
+            self.screenshot(f"role-option-{role_name}-not-found")
+            raise Exception(f"Could not select role '{role_name}' from dropdown")
+        
+        # Wait for selection to register
+        self.page.wait_for_timeout(1000)
+        self.screenshot(f"after-assign-role-{workspace_name}-{role_name}")
+        logger.info(f"✓ Assigned role '{role_name}' to workspace '{workspace_name}'")
+    
+    def save_user_settings(self) -> None:
+        """
+        Scroll down to find and click the "Save Changes" button in the Modify User Settings form.
+        Then wait for the success message and page to load.
+        """
+        logger.info("Saving user settings")
+        self.screenshot("before-save-user-settings")
+        
+        # Scroll down to find the Save Changes button (it's at the bottom of the form)
+        logger.info("Scrolling down to find Save Changes button")
+        for _ in range(5):  # Scroll multiple times to ensure we reach the bottom
+            self.page.evaluate("window.scrollBy(0, 500)")
+            self.page.wait_for_timeout(300)
+        self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")  # Scroll to very bottom
+        self.page.wait_for_timeout(1000)
+        self.screenshot("after-scroll-to-bottom")
+        logger.info("✓ Scrolled to bottom of form")
+        
+        # Find and click the Save Changes button
+        save_button_selectors = [
+            self.SAVE_CHANGES_BUTTON,
+            'button:has-text("Save Changes")',
+            'button:has-text("Save")',
+            'button[type="submit"]:has-text("Save")',
+            'button.btn-primary:has-text("Save Changes")',
+            'button:has([class*="check"]):has-text("Save")',  # Button with checkmark icon
+        ]
+        
+        save_clicked = False
+        for selector in save_button_selectors:
+            try:
+                locator = self.page.locator(selector)
+                if locator.count() > 0:
+                    # Try all matching elements to find the one at the bottom
+                    for idx in range(locator.count()):
+                        element = locator.nth(idx)
+                        if element.is_visible(timeout=2000):
+                            # Check if it's near the bottom of the page
+                            element_box = element.bounding_box()
+                            if element_box:
+                                # Button should be in the lower part of the page
+                                page_height = self.page.evaluate("document.body.scrollHeight")
+                                if element_box['y'] > page_height * 0.6:  # Lower 40% of page
+                                    element.scroll_into_view_if_needed()
+                                    self.page.wait_for_timeout(300)
+                                    element.click()
+                                    save_clicked = True
+                                    logger.info(f"✓ Clicked Save Changes button with selector: {selector} (element {idx})")
+                                    break
+            except Exception as e:
+                logger.debug(f"Save button selector '{selector}' failed: {e}")
+                continue
+            
+            if save_clicked:
+                break
+        
+        if not save_clicked:
+            self.screenshot("save-changes-button-not-found")
+            raise Exception("Could not find or click Save Changes button")
+        
+        # Wait for success message to appear
+        logger.info("Waiting for success message...")
+        try:
+            self.page.locator(self.SUCCESS_MESSAGE).wait_for(state="visible", timeout=10000)
+            logger.info("✓ Success message appeared: 'Changes Saved Successfully'")
+            self.screenshot("success-message-visible")
+        except Exception as e:
+            logger.warning(f"Success message not found: {e}")
+            # Continue anyway, the save might have worked
+        
+        # Wait for success message to disappear (modal might auto-close)
+        try:
+            self.page.locator(self.SUCCESS_MESSAGE).wait_for(state="hidden", timeout=10000)
+            logger.info("✓ Success message disappeared")
+        except Exception:
+            logger.info("Success message did not disappear (may stay visible)")
+        
+        # Wait for page to load after save
+        logger.info("Waiting for page to load after save...")
+        self.page.wait_for_load_state("networkidle", timeout=10000)
+        self.page.wait_for_timeout(2000)  # Additional wait for UI to stabilize
+        self.screenshot("after-save-user-settings")
+        logger.info("✓ User settings saved and page loaded")
+
 
