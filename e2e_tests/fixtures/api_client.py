@@ -335,10 +335,51 @@ class DagKnowsAPIClient:
     
     # ==================== WORKSPACE OPERATIONS ====================
     
-    def list_workspaces(self) -> List[Dict[str, Any]]:
-        """List user's workspaces."""
-        response = self._request("GET", "/api/workspaces")
-        return response.json().get("workspaces", [])
+    def list_workspaces(self, workspace_ids: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """
+        List workspaces (matches frontend behavior).
+        
+        Frontend calls: logFetchAJAX(getUrl('/api/workspaces/'))
+        
+        Args:
+            workspace_ids: Optional list of workspace IDs to fetch
+            
+        Returns:
+            List of workspace objects
+        """
+        params = {}
+        if workspace_ids:
+            params["ids"] = ",".join(workspace_ids)
+        
+        response = self._request("GET", "/api/workspaces/", params=params)
+        workspaces_dict = response.json().get("workspaces", {})
+        
+        # Convert dict to list (frontend does this)
+        result = []
+        if isinstance(workspaces_dict, dict):
+            for workspace_id, workspace in workspaces_dict.items():
+                if workspace:
+                    result.append(workspace)
+        elif isinstance(workspaces_dict, list):
+            result = workspaces_dict
+        
+        return result
+    
+    def get_workspace_by_name(self, workspace_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get workspace by name.
+        
+        Args:
+            workspace_name: Workspace name/title
+            
+        Returns:
+            Workspace object or None if not found
+        """
+        workspaces = self.list_workspaces()
+        for workspace in workspaces:
+            if workspace.get("title", "").lower() == workspace_name.lower():
+                return workspace
+        return None
     
     # ==================== SETTINGS OPERATIONS ====================
     
@@ -398,6 +439,327 @@ class DagKnowsAPIClient:
         }
         response = self._request("POST", "/api/chat/message", json=payload)
         return response.json()
+    
+    # ==================== USER OPERATIONS ====================
+    
+    def list_users(self, user_ids: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """
+        List users (matches frontend behavior).
+        
+        Frontend calls: logFetchAJAX(getUrl('/api/users/?ids=all'))
+        
+        Args:
+            user_ids: Optional list of user IDs to fetch (defaults to 'all')
+            
+        Returns:
+            List of user objects
+        """
+        params = {}
+        if user_ids:
+            params["ids"] = ",".join(user_ids)
+        else:
+            params["ids"] = "all"
+        
+        response = self._request("GET", "/api/users/", params=params)
+        return response.json().get("users", [])
+    
+    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        """
+        Get user by email address.
+        
+        Args:
+            email: User email address
+            
+        Returns:
+            User object or None if not found
+        """
+        users = self.list_users()
+        for user in users:
+            if user.get("email", "").lower() == email.lower():
+                return user
+        return None
+    
+    # ==================== IAM/ROLE OPERATIONS ====================
+    
+    def list_roles(self) -> List[Dict[str, Any]]:
+        """
+        List all roles (matches frontend behavior).
+        
+        Frontend calls: logFetchAJAX(getUrl('/api/iam/roles'), { method: "GET" })
+        
+        Returns:
+            List of role objects
+        """
+        response = self._request("GET", "/api/iam/roles")
+        return response.json().get("roles", [])
+    
+    def get_role_by_name(self, role_name: str, path: str = "dkroles") -> Optional[Dict[str, Any]]:
+        """
+        Get role by name (matches frontend behavior).
+        
+        Frontend calls: GET /api/iam/roles and filters by name and path
+        
+        Args:
+            role_name: Role name
+            path: Role path (default: "dkroles" for application roles)
+            
+        Returns:
+            Role object or None if not found
+        """
+        roles = self.list_roles()
+        for role in roles:
+            if (role.get("name", "").lower() == role_name.lower() and 
+                role.get("path", "") == path):
+                return role
+        return None
+    
+    def create_role(self, role_name: str, path: str = "dkroles") -> Dict[str, Any]:
+        """
+        Create a new role (matches frontend behavior).
+        
+        Frontend calls: logFetchAJAX(getUrl("/api/iam/roles"), {
+            method: "POST",
+            body: {"role": {"path": "dkroles", "name": role_name}}
+        })
+        
+        Args:
+            role_name: Role name
+            path: Role path (default: "dkroles" for application roles)
+            
+        Returns:
+            Created role object
+        """
+        payload = {
+            "role": {
+                "path": path,
+                "name": role_name
+            }
+        }
+        response = self._request("POST", "/api/iam/roles", json=payload)
+        return response.json().get("role", {})
+    
+    def assign_role_to_user(
+        self,
+        user_id: str,
+        role_name: str,
+        resource_type: str = "workspace",
+        resource_id: str = "",
+        path: str = "dkroles"
+    ) -> Dict[str, Any]:
+        """
+        Assign a role to a user for a resource (matches frontend behavior).
+        
+        Frontend calls: logFetchAJAX(getUrl(`/api/iam/users/${userid}/roles`), {
+            method: "POST",
+            body: {"added_roles": [...], "removed_roles": [...]}
+        })
+        
+        Args:
+            user_id: User ID
+            role_name: Role name to assign
+            resource_type: Resource type (default: "workspace")
+            resource_id: Resource ID (workspace ID, empty string for default workspace)
+            path: Role path (default: "dkroles")
+            
+        Returns:
+            Response from API
+        """
+        added_roles = [{
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "name": role_name,
+            "path": path
+        }]
+        
+        payload = {
+            "added_roles": added_roles,
+            "removed_roles": []
+        }
+        
+        response = self._request("POST", f"/api/iam/users/{user_id}/roles", json=payload)
+        return response.json()
+    
+    def remove_role_from_user(
+        self,
+        user_id: str,
+        role_name: str,
+        resource_type: str = "workspace",
+        resource_id: str = "",
+        path: str = "dkroles"
+    ) -> Dict[str, Any]:
+        """
+        Remove a role from a user for a resource (matches frontend behavior).
+        
+        Args:
+            user_id: User ID
+            role_name: Role name to remove
+            resource_type: Resource type (default: "workspace")
+            resource_id: Resource ID (workspace ID, empty string for default workspace)
+            path: Role path (default: "dkroles")
+            
+        Returns:
+            Response from API
+        """
+        removed_roles = [{
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "name": role_name,
+            "path": path
+        }]
+        
+        payload = {
+            "added_roles": [],
+            "removed_roles": removed_roles
+        }
+        
+        response = self._request("POST", f"/api/iam/users/{user_id}/roles", json=payload)
+        return response.json()
+    
+    def get_user_roles(self, user_id: str) -> Dict[str, List[str]]:
+        """
+        Get roles assigned to a user (matches frontend behavior).
+        
+        Frontend calls: logFetchAJAX(getUrl(`/api/iam/users/${userid}/roles`), { method: "GET" })
+        
+        Args:
+            user_id: User ID
+            
+        Returns:
+            Dictionary mapping workspace names to lists of role names
+            Example: {"Default": ["Admin"], "DEV": ["read1"]}
+        """
+        response = self._request("GET", f"/api/iam/users/{user_id}/roles")
+        rassocs = response.json().get("rassocs", [])
+        
+        out = {}
+        for rassoc in rassocs:
+            restype = rassoc.get("resource_type", "")
+            if restype != "proxy":
+                resource_id = rassoc.get("resource_id", "")
+                # Map empty resource_id to "Default" (frontend does this)
+                if not resource_id or resource_id == "undefined":
+                    resource_id = "Default"
+                
+                if resource_id not in out:
+                    out[resource_id] = []
+                out[resource_id].append(rassoc.get("role_name", ""))
+        
+        return out
+    
+    def get_privileges(self) -> List[str]:
+        """
+        Get all available privileges (matches frontend behavior).
+        
+        Frontend calls: logFetchAJAX(getUrl(`/api/iam/roles/privileges`), { method: "GET" })
+        
+        Returns:
+            List of privilege names (strings)
+        """
+        response = self._request("GET", "/api/iam/roles/privileges")
+        privileges = response.json().get("privileges", [])
+        # Return only privilege names (strings) like frontend does
+        return [p.get("name") for p in privileges if p.get("name")]
+    
+    def get_all_roles_and_privileges(self) -> Dict[str, List[str]]:
+        """
+        Get all roles and their assigned privileges (matches frontend behavior).
+        
+        Frontend calls: GET /api/iam/roles and filters for dkroles
+        
+        Returns:
+            Dictionary mapping role names to lists of privilege names
+        """
+        result = {}
+        
+        # Admin has all privileges
+        all_privileges = self.get_privileges()
+        result["Admin"] = all_privileges
+        
+        # Get all roles
+        roles = self.list_roles()
+        for role in roles:
+            if role.get("path") == "dkroles":
+                role_name = role.get("name", "")
+                if role_name.lower() != "admin":
+                    result[role_name] = role.get("permissions", [])
+        
+        return result
+    
+    def assign_privileges_to_role(
+        self,
+        role_id: str,
+        privileges: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Assign privileges to a role (matches frontend behavior).
+        
+        Frontend calls: PUT /api/iam/roles/{roleid} with {
+            "added_permissions": [...],
+            "role": role_object,
+            "update_mask": [...]
+        }
+        
+        Args:
+            role_id: Role ID (role name for dkroles)
+            privileges: List of privilege names to add
+            
+        Returns:
+            Updated role object
+        """
+        # First get the role to get its current state
+        role = self.get_role_by_name(role_id)
+        if not role:
+            raise ValueError(f"Role '{role_id}' not found")
+        
+        if "permissions" not in role:
+            role["permissions"] = []
+        
+        payload = {
+            "added_permissions": privileges,
+            "role": role,
+            "update_mask": list(role.keys())
+        }
+        
+        response = self._request("PUT", f"/api/iam/roles/{role_id}", json=payload)
+        return response.json().get("role", {})
+    
+    def remove_privileges_from_role(
+        self,
+        role_id: str,
+        privileges: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Remove privileges from a role (matches frontend behavior).
+        
+        Frontend calls: PUT /api/iam/roles/{roleid} with {
+            "removed_permissions": [...],
+            "role": role_object,
+            "update_mask": [...]
+        }
+        
+        Args:
+            role_id: Role ID (role name for dkroles)
+            privileges: List of privilege names to remove
+            
+        Returns:
+            Updated role object
+        """
+        # First get the role to get its current state
+        role = self.get_role_by_name(role_id)
+        if not role:
+            raise ValueError(f"Role '{role_id}' not found")
+        
+        if "permissions" not in role:
+            role["permissions"] = []
+        
+        payload = {
+            "removed_permissions": privileges,
+            "role": role,
+            "update_mask": list(role.keys())
+        }
+        
+        response = self._request("PUT", f"/api/iam/roles/{role_id}", json=payload)
+        return response.json().get("role", {})
 
 
 # Factory function
