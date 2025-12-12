@@ -132,8 +132,9 @@ pipeline {
                             echo "DAGKNOWS_URL=${env.DAGKNOWS_URL}" >> .env
                             echo "DAGKNOWS_PROXY=${env.DAGKNOWS_PROXY}" >> .env
                             echo "DAGKNOWS_TOKEN=\${JWT_TOKEN}" >> .env
-                            echo "TEST_USER_EMAIL=test@dagknows.com" >> .env
-                            echo "TEST_USER_PASSWORD=test_password" >> .env
+                            echo "TEST_USER_EMAIL=yash+user@dagknows.com" >> .env
+                            echo "TEST_USER_PASSWORD=1Hey2Yash*" >> .env
+                            echo "TEST_ORG=dagknows" >> .env
                             """
                         }
                     }
