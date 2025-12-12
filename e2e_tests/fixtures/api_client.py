@@ -152,6 +152,9 @@ class DagKnowsAPIClient:
         Args:
             task_id: Task ID
             wsid: Optional workspace ID
+            
+        Raises:
+            requests.HTTPError: If task not found (404) or other HTTP error
         """
         params = {}
         if wsid:
@@ -160,6 +163,43 @@ class DagKnowsAPIClient:
         # Use /api/tasks/ (same as frontend) - req-router will forward to /api/v1/tasks/ internally
         response = self._request("GET", f"/api/tasks/{task_id}", params=params)
         return response.json()
+    
+    def task_exists(self, task_id: str, wsid: Optional[str] = None) -> bool:
+        """
+        Check if a task exists without logging errors for expected 404s.
+        
+        Args:
+            task_id: Task ID
+            wsid: Optional workspace ID
+            
+        Returns:
+            True if task exists, False if not found (404)
+        """
+        params = {}
+        if wsid:
+            params["wsid"] = wsid
+        
+        # Add proxy param if needed
+        if self.proxy_param:
+            proxy_str = self.proxy_param.lstrip('?')
+            if '=' in proxy_str:
+                proxy_key, proxy_value = proxy_str.split('=', 1)
+                params[proxy_key] = proxy_value
+        
+        url = self._get_url(f"/api/tasks/{task_id}", with_proxy=False)
+        
+        try:
+            # Make request directly to avoid error logging for expected 404s
+            response = self.session.get(url, params=params, timeout=30)
+            if response.status_code == 404:
+                return False
+            response.raise_for_status()
+            return True
+        except requests.HTTPError:
+            # For non-404 errors, re-raise
+            raise
+        except Exception:
+            return False
     
     def update_task(
         self,

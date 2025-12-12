@@ -255,22 +255,13 @@ print(f"Sum: {sum_result}")
             logger.info("Step 10: Verifying deletion")
             time.sleep(2)  # Give more time for deletion to propagate
             
-            try:
-                get_deleted_response = api_client.get_task(task_id)
-                deleted_task_data = get_deleted_response.get("task", get_deleted_response)
-                if deleted_task_data:
-                    logger.warning(f"Task {task_id} still exists after deletion.")
-                    logger.warning("This might indicate the deletion didn't work properly")
-                    # Don't raise error, but log warning
-                else:
-                    logger.info(f"✓ Task {task_id} successfully verified as deleted (response empty or no task key).")
-            except requests.exceptions.HTTPError as e:
-                if e.response.status_code == 404:
-                    logger.info(f"✓ Task {task_id} successfully verified as deleted (GET returned 404).")
-                else:
-                    logger.warning(f"Unexpected HTTP error during deletion verification: {e}")
-            except Exception as e:
-                logger.info(f"✓ Task {task_id} successfully verified as deleted (GET returned error: {e}).")
+            # Check if task still exists (using method that doesn't log errors for 404s)
+            task_still_exists = api_client.task_exists(task_id, wsid=wsid)
+            if task_still_exists:
+                logger.warning(f"Task {task_id} still exists after deletion.")
+                logger.warning("This might indicate the deletion didn't work properly")
+            else:
+                logger.info(f"✓ Task {task_id} successfully verified as deleted (task no longer exists).")
         except Exception as e:
             logger.error(f"✗ Task deletion failed: {e}")
             logger.error(f"Task ID for manual cleanup: {task_id}")
