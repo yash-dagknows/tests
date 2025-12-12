@@ -18,7 +18,7 @@
    - New Item → Pipeline
    - Name: `e2e-tests-pipeline`
    - Pipeline script from SCM: Git
-   - Repository: `https://github.com/dagknows/tests.git`
+   - Repository: `https://github.com/yash-dagknows/tests.git`
    - Script Path: `e2e_tests/ci/e2e-tests-pipeline.groovy`
 
 2. **Configure Credentials:**

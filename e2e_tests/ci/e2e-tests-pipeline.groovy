@@ -57,7 +57,7 @@ pipeline {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'yash-dagknows-github-pat', usernameVariable: 'USERNAME', passwordVariable: 'GIT_TOKEN')]) {
                         sh """
-                        git clone -b ${params.BRANCH} https://"\$GIT_TOKEN":x-oauth-basic@github.com/dagknows/tests.git
+                        git clone -b ${params.BRANCH} https://"\$GIT_TOKEN":x-oauth-basic@github.com/yash-dagknows/tests.git
                         cd tests
                         """
                     }
