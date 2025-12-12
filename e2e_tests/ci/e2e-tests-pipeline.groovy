@@ -156,8 +156,12 @@ pipeline {
                             echo "⚠️ Using system Python (no venv available)"
                         fi
                         # Set PYTHONPATH to include current directory so imports work
-                        export PYTHONPATH="${env.E2E_DIR}:${PYTHONPATH:-}"
-                        echo "PYTHONPATH: ${PYTHONPATH}"
+                        if [ -z "\$PYTHONPATH" ]; then
+                            export PYTHONPATH="${env.E2E_DIR}"
+                        else
+                            export PYTHONPATH="${env.E2E_DIR}:\$PYTHONPATH"
+                        fi
+                        echo "PYTHONPATH: \$PYTHONPATH"
                         echo "Running pytest with markers: ${markerFilter}"
                         # Run pytest - will fail the stage if tests fail
                         pytest api_tests/ -v ${markerFilter}
