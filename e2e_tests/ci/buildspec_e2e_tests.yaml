@@ -1,0 +1,83 @@
+# AWS CodeBuild buildspec for E2E Tests
+# Use this if integrating with CodeBuild instead of Jenkins
+
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.10
+      nodejs: 18
+    commands:
+      - echo "Installing system dependencies..."
+      - apt-get update -y
+      - apt-get install -y python3-venv python3-pip
+      - npm install -g playwright@latest
+
+  pre_build:
+    commands:
+      - echo "Setting up test environment..."
+      - cd tests/e2e_tests
+      - python3 -m venv venv
+      - source venv/bin/activate
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+      - playwright install chromium
+      - playwright install-deps chromium || true
+      - |
+        # Configure test environment
+        cp env.template .env
+        echo "DAGKNOWS_URL=${DAGKNOWS_URL:-https://dev.dagknows.com}" >> .env
+        echo "DAGKNOWS_PROXY=${DAGKNOWS_PROXY:-?proxy=dev1}" >> .env
+        echo "DAGKNOWS_TOKEN=${JWT_TOKEN}" >> .env
+        echo "TEST_USER_EMAIL=${TEST_USER_EMAIL:-test@dagknows.com}" >> .env
+        echo "TEST_USER_PASSWORD=${TEST_USER_PASSWORD}" >> .env
+
+  build:
+    commands:
+      - echo "Running E2E tests..."
+      - cd tests/e2e_tests
+      - source venv/bin/activate
+      - |
+        # Run API tests
+        if [ "${RUN_API_TESTS:-true}" = "true" ]; then
+          echo "Running API E2E tests..."
+          pytest api_tests/ -v \
+            --html=reports/api-report.html \
+            --self-contained-html \
+            --junitxml=reports/api-junit.xml \
+            || true
+        fi
+      - |
+        # Run UI tests
+        if [ "${RUN_UI_TESTS:-true}" = "true" ]; then
+          echo "Running UI E2E tests..."
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+          pytest ui_tests/ -v \
+            --html=reports/ui-report.html \
+            --self-contained-html \
+            --junitxml=reports/ui-junit.xml \
+            || true
+        fi
+
+  post_build:
+    commands:
+      - echo "Collecting test artifacts..."
+      - cd tests/e2e_tests
+      - mkdir -p artifacts
+      - cp reports/*.html artifacts/ || true
+      - cp reports/*.xml artifacts/ || true
+      - tar -czf artifacts/screenshots.tar.gz reports/screenshots/ || true
+
+artifacts:
+  files:
+    - tests/e2e_tests/artifacts/**
+  name: e2e-test-results-$(date +%Y-%m-%d-%H-%M-%S)
+
+reports:
+  e2e-test-report:
+    files:
+      - tests/e2e_tests/reports/**/*.xml
+    base-directory: tests/e2e_tests/reports
+

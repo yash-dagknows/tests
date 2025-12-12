@@ -1,0 +1,120 @@
+# Dockerfile for Jenkins E2E Test Agent
+# This agent includes all dependencies for both API and UI E2E tests
+# Python 3.10+ with pytest, Playwright, and all required dependencies pre-installed
+# Note: Pipeline will run API tests first, UI tests can be enabled later
+
+FROM ubuntu:22.04
+
+# Avoid interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies (including Playwright system deps)
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3.10-venv \
+    python3-pip \
+    git \
+    curl \
+    wget \
+    ca-certificates \
+    # Node.js for Playwright
+    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    # Playwright system dependencies (all required libraries)
+    && apt-get install -y \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libatspi2.0-0 \
+    libxshmfence1 \
+    libglu1-mesa \
+    fonts-liberation \
+    libxcb1 \
+    libx11-6 \
+    libx11-xcb1 \
+    xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create symlinks for python and pip
+RUN ln -s /usr/bin/python3.10 /usr/bin/python3 && \
+    ln -s /usr/bin/python3 /usr/bin/python && \
+    ln -s /usr/bin/pip3 /usr/bin/pip
+
+# Set working directory
+WORKDIR /home/jenkins
+
+# Create jenkins user (if not exists)
+RUN useradd -m -s /bin/bash jenkins || true
+
+# Install all Python dependencies (API + UI tests)
+# This includes Playwright for UI tests (even though we'll run API tests first)
+RUN pip3 install --upgrade pip && \
+    pip3 install \
+    # Core Testing Frameworks
+    pytest==7.4.3 \
+    pytest-playwright==0.4.4 \
+    playwright==1.40.0 \
+    pytest-asyncio==0.21.1 \
+    # API Testing
+    requests==2.31.0 \
+    urllib3==2.1.0 \
+    # Test Reporting
+    pytest-html==4.1.1 \
+    allure-pytest==2.13.2 \
+    pytest-json-report==1.5.0 \
+    # Utilities
+    python-dotenv==1.0.0 \
+    faker==22.0.0 \
+    pydantic==2.5.3 \
+    # JWT handling
+    PyJWT==2.8.0 \
+    # Date/Time
+    python-dateutil==2.8.2 \
+    # Logging
+    colorlog==6.8.0
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PATH="/home/jenkins/.local/bin:${PATH}"
+ENV DISPLAY=:99
+
+# Create reports directory and cache directory for Playwright
+RUN mkdir -p /home/jenkins/reports /home/jenkins/.cache && \
+    chown -R jenkins:jenkins /home/jenkins
+
+# Switch to jenkins user
+USER jenkins
+
+# Install Playwright browsers as jenkins user (ensures correct permissions)
+# Playwright installs browsers to ~/.cache/ms-playwright
+RUN playwright install chromium && \
+    playwright install-deps chromium || true
+
+# Verify installation
+RUN python3 --version && \
+    pip3 --version && \
+    pytest --version && \
+    playwright --version && \
+    node --version && \
+    npm --version
+
+# Verify Playwright can find browsers (basic check)
+RUN python3 -c "from playwright.sync_api import sync_playwright; print('✓ Playwright installed and working')" || echo "⚠ Playwright verification skipped"
+
+# Default command (Jenkins will override this)
+CMD ["/bin/bash"]
+
