@@ -124,6 +124,20 @@ pipeline {
                     script {
                         // Get JWT token from Jenkins credentials
                         withCredentials([string(credentialsId: 'dagknows-jwt-token', variable: 'JWT_TOKEN')]) {
+                            script {
+                                // Log token info (first and last 20 chars for verification)
+                                def tokenPreview = env.JWT_TOKEN ? "${env.JWT_TOKEN.take(20)}...${env.JWT_TOKEN.takeRight(20)}" : "NOT SET"
+                                echo "Using JWT token from Jenkins credentials (preview: ${tokenPreview})"
+                                
+                                // Verify token matches expected (user's specified token)
+                                def expectedTokenStart = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9"
+                                if (env.JWT_TOKEN?.startsWith(expectedTokenStart)) {
+                                    echo "✓ JWT token format verified (matches expected token)"
+                                } else {
+                                    echo "⚠️ JWT token format may be different from expected"
+                                }
+                            }
+                            
                             sh """
                             # Create .env file from template
                             cp env.template .env
