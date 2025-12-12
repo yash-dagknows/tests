@@ -14,6 +14,7 @@ Based on frontend API calls:
 import pytest
 import logging
 import time
+import requests
 from fixtures.api_client import create_api_client
 from config.test_users import get_test_user
 
@@ -228,19 +229,52 @@ print(f"Sum: {sum_result}")
         # Step 9: Clean up - Delete the created task
         logger.info("Step 9: Cleaning up - Deleting created task")
         try:
-            api_client.delete_task(task_id)
+            # Extract wsid from the task (frontend always passes wsid when deleting)
+            # Get the task to find its workspace_ids
+            get_response = api_client.get_task(task_id)
+            if "task" in get_response:
+                task_for_deletion = get_response["task"]
+            else:
+                task_for_deletion = get_response
+            
+            # Extract wsid from workspace_ids (frontend uses current_space_state or "__DEFAULT__")
+            workspace_ids = task_for_deletion.get("workspace_ids", [])
+            if workspace_ids and len(workspace_ids) > 0:
+                wsid = workspace_ids[0]  # Use first workspace ID
+            else:
+                wsid = "__DEFAULT__"  # Frontend uses "__DEFAULT__" if no wsid
+            
+            logger.info(f"Deleting task with wsid: {wsid}")
+            
+            # Delete with wsid and recurse=True (to delete any child tasks)
+            # Frontend: deleteTask(task_id, recurse, forced=false)
+            api_client.delete_task(task_id, wsid=wsid, recurse=True, forced=False)
             logger.info(f"✓ Task deleted: {task_id}")
             
-            # Verify deletion (optional - some backends may still return the task)
+            # Verify deletion - wait a bit for deletion to propagate
+            logger.info("Step 10: Verifying deletion")
+            time.sleep(2)  # Give more time for deletion to propagate
+            
             try:
-                time.sleep(1)  # Brief wait for deletion to propagate
-                api_client.get_task(task_id)
-                logger.warning("Task still exists after deletion (backend may not fully delete)")
-            except Exception:
-                logger.info("✓ Task properly deleted (GET returned error as expected)")
+                get_deleted_response = api_client.get_task(task_id)
+                deleted_task_data = get_deleted_response.get("task", get_deleted_response)
+                if deleted_task_data:
+                    logger.warning(f"Task {task_id} still exists after deletion.")
+                    logger.warning("This might indicate the deletion didn't work properly")
+                    # Don't raise error, but log warning
+                else:
+                    logger.info(f"✓ Task {task_id} successfully verified as deleted (response empty or no task key).")
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 404:
+                    logger.info(f"✓ Task {task_id} successfully verified as deleted (GET returned 404).")
+                else:
+                    logger.warning(f"Unexpected HTTP error during deletion verification: {e}")
+            except Exception as e:
+                logger.info(f"✓ Task {task_id} successfully verified as deleted (GET returned error: {e}).")
         except Exception as e:
-            logger.warning(f"Task deletion failed (may need manual cleanup): {e}")
-            logger.warning(f"Task ID for manual cleanup: {task_id}")
+            logger.error(f"✗ Task deletion failed: {e}")
+            logger.error(f"Task ID for manual cleanup: {task_id}")
+            raise
         
         logger.info("=== Task Full Lifecycle E2E Test (API-based) Completed ===")
         

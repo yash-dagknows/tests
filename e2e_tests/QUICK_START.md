@@ -48,10 +48,10 @@ python -c "from config.env import config; print(f'URL: {config.BASE_URL}')"
 ### **Step 4: Run Your First Test**
 
 ```bash
-# Run a simple API test
-pytest api_tests/test_task_lifecycle.py::TestTaskLifecycleE2E::test_create_update_execute_delete_task -v
+# Run a simple API test (Task CRUD)
+pytest api_tests/test_task_crud_api.py::TestTaskCRUDE2E::test_task_full_lifecycle_via_api -v
 
-# Or run a UI test
+# Or run a UI test (Login)
 pytest ui_tests/test_login_flow.py::TestLoginFlowE2E::test_successful_login_and_logout -v
 ```
 
@@ -79,12 +79,18 @@ pytest --html=reports/report.html
 
 | Test | Description | Duration |
 |------|-------------|----------|
-| `test_task_lifecycle.py` | Create → Update → Delete task | ~10s |
+| `test_task_crud_api.py` | Full task lifecycle (Create → Read → Update → Delete) | ~10s |
+| `test_task_lifecycle.py` | Create → Update → Execute → Delete task | ~15s |
 | `test_alert_workflow.py` | Alert → Task execution | ~15s |
+| `test_role_management_api.py` | Create role and assign privileges via API | ~10s |
+| `test_user_role_assignment_api.py` | Assign role to user for workspace via API | ~10s |
 
 **Run API tests:**
 ```bash
 pytest api_tests/ -v
+
+# Run specific test
+pytest api_tests/test_task_crud_api.py::TestTaskCRUDE2E::test_task_full_lifecycle_via_api -v
 ```
 
 ### **UI-Based E2E Tests** (`ui_tests/`)
@@ -93,11 +99,20 @@ pytest api_tests/ -v
 |------|-------------|----------|
 | `test_login_flow.py` | Login/logout workflow | ~15s |
 | `test_task_creation.py` | Create tasks via UI | ~30s |
+| `test_task_crud.py` | Task CRUD operations via UI | ~30s |
+| `test_workspace_management.py` | Create and navigate to workspace | ~20s |
+| `test_role_management.py` | Create role and assign privileges | ~30s |
+| `test_user_role_assignment.py` | Assign role to user for workspace | ~30s |
 | `test_ai_chat_session.py` | AI chat interaction | ~60s |
+| `test_ai_agent_workflow.py` | Complete AI agent workflow | ~90s |
+| `test_alert_handling_modes.py` | Alert handling in different modes | ~60s |
 
 **Run UI tests:**
 ```bash
 pytest ui_tests/ -v
+
+# Run specific test
+pytest ui_tests/test_login_flow.py::TestLoginFlowE2E::test_successful_login_and_logout -v
 ```
 
 ---
@@ -131,11 +146,20 @@ pytest -v
 ### **Test Specific Workflow**
 
 ```bash
-# Test task creation workflow
-pytest api_tests/test_task_lifecycle.py -v
+# Test task CRUD via API
+pytest api_tests/test_task_crud_api.py::TestTaskCRUDE2E::test_task_full_lifecycle_via_api -v
+
+# Test task lifecycle (create, update, execute, delete)
+pytest api_tests/test_task_lifecycle.py::TestTaskLifecycleE2E::test_create_update_execute_delete_task -v
 
 # Test login flow
-pytest ui_tests/test_login_flow.py -v
+pytest ui_tests/test_login_flow.py::TestLoginFlowE2E::test_successful_login_and_logout -v
+
+# Test workspace management
+pytest ui_tests/test_workspace_management.py::TestWorkspaceManagementE2E::test_create_and_navigate_to_workspace -v
+
+# Test role management
+pytest ui_tests/test_role_management.py::TestRoleManagementE2E::test_create_role_and_assign_privileges -v
 
 # Test with screenshots
 pytest ui_tests/ -v --screenshot=on
@@ -145,7 +169,7 @@ pytest ui_tests/ -v --screenshot=on
 
 ```bash
 # Run with full output
-pytest api_tests/test_task_lifecycle.py -v -s
+pytest api_tests/test_task_crud_api.py -v -s
 
 # Run with Playwright headed mode (see browser)
 pytest ui_tests/test_login_flow.py --headed
@@ -161,17 +185,27 @@ pytest ui_tests/ --headed --slowmo=1000
 ```
 e2e_tests/
 ├── api_tests/          # API-based E2E tests
+│   ├── test_task_crud_api.py
 │   ├── test_task_lifecycle.py
-│   └── test_alert_workflow.py
+│   ├── test_alert_workflow.py
+│   ├── test_role_management_api.py
+│   └── test_user_role_assignment_api.py
 │
 ├── ui_tests/           # UI-based E2E tests  
 │   ├── test_login_flow.py
 │   ├── test_task_creation.py
-│   └── test_ai_chat_session.py
+│   ├── test_task_crud.py
+│   ├── test_workspace_management.py
+│   ├── test_role_management.py
+│   ├── test_user_role_assignment.py
+│   ├── test_ai_chat_session.py
+│   ├── test_ai_agent_workflow.py
+│   └── test_alert_handling_modes.py
 │
 ├── pages/              # Page Object Model
 │   ├── login_page.py
 │   ├── task_page.py
+│   ├── settings_page.py
 │   └── chat_page.py
 │
 ├── fixtures/           # Reusable test fixtures
@@ -209,7 +243,7 @@ pytest -v
 pytest -s
 
 # Run specific test
-pytest api_tests/test_task_lifecycle.py::test_name
+pytest api_tests/test_task_crud_api.py::TestTaskCRUDE2E::test_task_full_lifecycle_via_api
 
 # Run tests matching pattern
 pytest -k "login"
