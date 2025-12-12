@@ -51,8 +51,10 @@ class TestRoleManagementAPIE2E:
         logger.info("=== Starting Role Creation and Privilege Assignment E2E Test (API-based) ===")
         
         # Generate unique role name with timestamp (matching UI test)
+        # Note: Role names can only contain alphanumeric characters and spaces (no underscores)
+        # Backend validation: hasUnsafeCharacters() rejects anything not matching [a-zA-Z0-9 ]
         timestamp = int(time.time())
-        role_name = f"read1_{timestamp}"
+        role_name = f"read1{timestamp}"  # No underscore - only alphanumeric allowed
         logger.info(f"Test role name: {role_name}")
         
         # Privileges to assign (matching UI test)
