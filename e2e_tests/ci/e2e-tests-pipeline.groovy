@@ -207,10 +207,8 @@ pipeline {
 
     post {
         always {
-            script {
-                // Test results are shown in console output
-                // No artifact archiving for now - will add back when tests are working
-            }
+            // Test results are shown in console output
+            // No artifact archiving for now - will add back when tests are working
         }
         success {
             echo "✅ E2E API tests completed successfully - all tests passed!"
