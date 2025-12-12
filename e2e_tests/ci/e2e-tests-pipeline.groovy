@@ -137,40 +137,36 @@ pipeline {
 
         // UI E2E Tests Stage (commented out - will be enabled later)
         // Uncomment this stage when ready to run UI tests
-        /*
-        stage('Run UI E2E Tests') {
-            steps {
-                dir("${env.E2E_DIR}") {
-                    script {
-                        // Ensure reports directory exists
-                        sh "mkdir -p ${env.REPORTS_DIR}"
-                        
-                        // Start Xvfb for headless browser
-                        sh """
-                        export DISPLAY=:99
-                        Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
-                        """
-                        
-                        def markerFilter = env.TEST_MARKERS ? "-m '${env.TEST_MARKERS}'" : "-m 'ui'"
-                        sh """
-                        source venv/bin/activate
-                        pytest ui_tests/ -v \\
-                            --html=${env.REPORTS_DIR}/ui-report.html \\
-                            --self-contained-html \\
-                            --junitxml=${env.REPORTS_DIR}/ui-junit.xml \\
-                            ${markerFilter} || true
-                        """
-                    }
-                }
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: "${env.REPORTS_DIR}/ui-report.html, ${env.REPORTS_DIR}/ui-junit.xml"
-                    archiveArtifacts artifacts: "${env.REPORTS_DIR}/screenshots/**/*"
-                }
-            }
-        }
-        */
+        // 
+        // When uncommenting, use this stage:
+        // stage('Run UI E2E Tests') {
+        //     steps {
+        //         dir("${env.E2E_DIR}") {
+        //             script {
+        //                 sh "mkdir -p ${env.REPORTS_DIR}"
+        //                 sh """
+        //                 export DISPLAY=:99
+        //                 Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+        //                 """
+        //                 def markerFilter = env.TEST_MARKERS ? "-m '${env.TEST_MARKERS}'" : "-m 'ui'"
+        //                 sh """
+        //                 source venv/bin/activate
+        //                 pytest ui_tests/ -v \\
+        //                     --html=${env.REPORTS_DIR}/ui-report.html \\
+        //                     --self-contained-html \\
+        //                     --junitxml=${env.REPORTS_DIR}/ui-junit.xml \\
+        //                     ${markerFilter} || true
+        //                 """
+        //             }
+        //         }
+        //     }
+        //     post {
+        //         always {
+        //             archiveArtifacts artifacts: "${env.REPORTS_DIR}/ui-report.html, ${env.REPORTS_DIR}/ui-junit.xml"
+        //             archiveArtifacts artifacts: "${env.REPORTS_DIR}/screenshots/"
+        //         }
+        //     }
+        // }
     }
 
     post {
