@@ -174,8 +174,30 @@ class TestRoleManagementAPIE2E:
             logger.warning(f"Could not fully verify privileges: {e}")
             logger.warning("This might be expected if verification requires additional time")
         
+        # Step 8: Clean up - Delete the created role
+        logger.info("Step 8: Cleaning up - Deleting created role")
+        try:
+            api_client.delete_role(role_name, path="dkroles")
+            logger.info(f"✓ Role deleted: {role_name}")
+            
+            # Verify deletion - wait a bit for deletion to propagate
+            logger.info("Step 9: Verifying deletion")
+            time.sleep(1)  # Brief wait for deletion to propagate
+            
+            # Check if role still exists
+            deleted_role = api_client.get_role_by_name(role_name)
+            if deleted_role:
+                logger.warning(f"Role '{role_name}' still exists after deletion")
+            else:
+                logger.info(f"✓ Role '{role_name}' successfully verified as deleted")
+        except Exception as e:
+            logger.error(f"✗ Role deletion failed: {e}")
+            logger.error(f"Role name for manual cleanup: {role_name}")
+            # Don't raise - allow test to complete even if cleanup fails
+            logger.warning("Test completed but cleanup failed - role may need manual deletion")
+        
         logger.info("=== Role Creation and Privilege Assignment E2E Test (API-based) Completed ===")
         
-        # Return role name for potential cleanup or use in other tests
+        # Return role name for potential use in other tests
         return role_name
 

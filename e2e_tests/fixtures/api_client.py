@@ -913,6 +913,36 @@ class DagKnowsAPIClient:
         
         response = self._request("PUT", f"/api/iam/roles/{role_id}", json=payload)
         return response.json().get("role", {})
+    
+    def delete_role(self, role_name: str, path: str = "dkroles") -> Optional[Dict[str, Any]]:
+        """
+        Delete a role (matches frontend behavior).
+        
+        Frontend calls: DELETE /api/iam/roles/{roleid}
+        
+        For dkroles, the roleid format is "dkroles:role_name" or just "role_name"
+        The backend handles both formats:
+        - If no ":" in roleid, deletes all roles with that name
+        - If ":" present, uses "path:name" format
+        
+        Args:
+            role_name: Role name
+            path: Role path (default: "dkroles" for application roles)
+            
+        Returns:
+            Delete response or None
+        """
+        # Use "path:name" format for specificity (matches how roles are stored)
+        role_id = f"{path}:{role_name}"
+        
+        try:
+            response = self._request("DELETE", f"/api/iam/roles/{role_id}")
+            return response.json() if response.text else {}
+        except requests.HTTPError as e:
+            if e.response.status_code == 404:
+                logger.warning(f"Role '{role_name}' not found (may already be deleted)")
+                return None
+            raise
 
 
 # Factory function
