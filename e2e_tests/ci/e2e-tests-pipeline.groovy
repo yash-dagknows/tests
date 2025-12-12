@@ -72,6 +72,9 @@ pipeline {
                         echo "Setting up Python virtual environment..."
                         echo "Creating virtual environment (with fallbacks)..."
                         sh """
+                        #!/bin/bash
+                        set -e
+                        
                         # Try multiple methods to create virtual environment
                         # Method 1: Try python3 -m venv (requires python3-venv package)
                         if python3 -m venv venv 2>/dev/null; then
@@ -101,7 +104,7 @@ pipeline {
                         
                         # Activate venv and install dependencies (if venv was created)
                         if [ -d "venv" ]; then
-                            source venv/bin/activate
+                            source venv/bin/activate || . venv/bin/activate
                             pip install --upgrade pip
                             # Install all dependencies including Playwright (for future UI tests)
                             pip install -r requirements.txt
@@ -147,9 +150,10 @@ pipeline {
                         
                         def markerFilter = env.TEST_MARKERS ? "-m '${env.TEST_MARKERS}'" : "-m 'api'"
                         sh """
+                        #!/bin/bash
                         # Activate venv if it exists, otherwise use system Python
                         if [ -d "venv" ]; then
-                            source venv/bin/activate
+                            source venv/bin/activate || . venv/bin/activate
                         else
                             echo "⚠️ Using system Python (no venv available)"
                         fi
@@ -209,19 +213,9 @@ pipeline {
                 // Publish test results
                 junit allowEmptyResults: true, testResults: "${env.REPORTS_DIR}/**/*.xml"
                 
-                // Publish HTML reports (if publishHTML plugin is available)
-                // Note: If publishHTML plugin is not installed, reports are still available as artifacts
-                try {
-                    publishHTML([
-                        reportDir: "${env.REPORTS_DIR}",
-                        reportFiles: 'api-report.html',  // Add 'ui-report.html' when UI tests are enabled
-                        reportName: 'E2E Test Report',
-                        keepAll: true
-                    ])
-                } catch (Exception e) {
-                    echo "⚠️ publishHTML plugin not available - reports available as artifacts only"
-                    echo "To enable HTML report publishing, install 'HTML Publisher' plugin in Jenkins"
-                }
+                // Note: HTML reports are available as artifacts
+                // To enable HTML report publishing in Jenkins UI, install 'HTML Publisher' plugin
+                // Reports can be downloaded from build artifacts: ${env.REPORTS_DIR}/api-report.html
             }
         }
         success {
