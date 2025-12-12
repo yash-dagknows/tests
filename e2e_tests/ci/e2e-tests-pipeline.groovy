@@ -145,30 +145,24 @@ pipeline {
             steps {
                 dir("${env.E2E_DIR}") {
                     script {
-                        // Ensure reports directory exists
-                        sh "mkdir -p ${env.REPORTS_DIR}"
-                        
                         def markerFilter = env.TEST_MARKERS ? "-m '${env.TEST_MARKERS}'" : "-m 'api'"
                         sh """
                         #!/bin/bash
+                        set -e
                         # Activate venv if it exists, otherwise use system Python
                         if [ -d "venv" ]; then
                             source venv/bin/activate || . venv/bin/activate
                         else
                             echo "⚠️ Using system Python (no venv available)"
                         fi
-                        pytest api_tests/ -v \\
-                            --html=${env.REPORTS_DIR}/api-report.html \\
-                            --self-contained-html \\
-                            --junitxml=${env.REPORTS_DIR}/api-junit.xml \\
-                            ${markerFilter} || true
+                        # Set PYTHONPATH to include current directory so imports work
+                        export PYTHONPATH="${env.E2E_DIR}:${PYTHONPATH:-}"
+                        echo "PYTHONPATH: ${PYTHONPATH}"
+                        echo "Running pytest with markers: ${markerFilter}"
+                        # Run pytest - will fail the stage if tests fail
+                        pytest api_tests/ -v ${markerFilter}
                         """
                     }
-                }
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: "${env.REPORTS_DIR}/api-report.html, ${env.REPORTS_DIR}/api-junit.xml"
                 }
             }
         }
@@ -210,20 +204,15 @@ pipeline {
     post {
         always {
             script {
-                // Publish test results
-                junit allowEmptyResults: true, testResults: "${env.REPORTS_DIR}/**/*.xml"
-                
-                // Note: HTML reports are available as artifacts
-                // To enable HTML report publishing in Jenkins UI, install 'HTML Publisher' plugin
-                // Reports can be downloaded from build artifacts: ${env.REPORTS_DIR}/api-report.html
+                // Test results are shown in console output
+                // No artifact archiving for now - will add back when tests are working
             }
         }
         success {
-            echo "✅ E2E API tests completed successfully"
+            echo "✅ E2E API tests completed successfully - all tests passed!"
         }
         failure {
-            echo "❌ E2E API tests failed - check reports for details"
-            // Optionally send notifications (Slack, email, etc.)
+            echo "❌ E2E API tests failed - check console output above for details"
         }
         unstable {
             echo "⚠️ E2E API tests completed with warnings"
